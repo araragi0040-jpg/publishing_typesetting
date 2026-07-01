@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = 'v019.1';
+const APP_VERSION = 'v019.2';
 const SCHEMA_VERSION = 19;
 const AUTOSAVE_DELAY = 700;
 const MAX_MEDIA_ASSETS = 20;
@@ -106,9 +106,9 @@ const SAMPLE_MANUSCRIPT = Object.freeze({
   title: 'サンプルタイトル',
   subtitle: '出力前チェック対応の確認用原稿',
   author: '著者名',
-  body: `# 第1章　組版アプリv019
+  body: `# 第1章　組版アプリv019.2
 
-これは、組版アプリv019の動作確認用原稿です。用紙設定から「縦書き・右綴じ」へ切り替えると、同じ原稿を縦書きで確認できます。
+これは、組版アプリv019.2の動作確認用原稿です。用紙設定から「縦書き・右綴じ」へ切り替えると、同じ原稿を縦書きで確認できます。
 
 文字を選択して、**太字**、《《傍点》》、｜組版《くみはん》、__下線__を設定できます。記号はプレビューやPDFには表示されません。
 
@@ -146,7 +146,7 @@ const DEFAULT_BOOK_MATTER = Object.freeze({
 });
 
 const DEFAULT_STATE = Object.freeze({
-  projectName: '組版アプリ v019 サンプル',
+  projectName: '組版アプリ v019.2 サンプル',
   manuscript: { ...SAMPLE_MANUSCRIPT, paragraphs: [], chapters: [], media: [], matter: deepClone(DEFAULT_BOOK_MATTER) },
   paragraphOverrides: {},
   settings: DEFAULT_SETTINGS,
