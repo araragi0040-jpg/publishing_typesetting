@@ -1,20 +1,20 @@
 'use strict';
 
-const APP_VERSION = 'v009';
-const SCHEMA_VERSION = 9;
+const APP_VERSION = 'v010';
+const SCHEMA_VERSION = 10;
 const AUTOSAVE_DELAY = 700;
 
-const PROJECT_INDEX_KEY = 'typesetting-app-v009-project-index';
-const PROJECT_PREFIX = 'typesetting-app-v009-project:';
-const CURRENT_PROJECT_KEY = 'typesetting-app-v009-current-project';
-const TEMPLATE_STORAGE_KEY = 'typesetting-app-v009-templates';
+const PROJECT_INDEX_KEY = 'typesetting-app-v010-project-index';
+const PROJECT_PREFIX = 'typesetting-app-v010-project:';
+const CURRENT_PROJECT_KEY = 'typesetting-app-v010-current-project';
+const TEMPLATE_STORAGE_KEY = 'typesetting-app-v010-templates';
 
-const LEGACY_V8_PROJECT_INDEX_KEY = 'typesetting-app-v008-project-index';
-const LEGACY_V8_PROJECT_PREFIX = 'typesetting-app-v008-project:';
-const LEGACY_V8_CURRENT_PROJECT_KEY = 'typesetting-app-v008-current-project';
-const LEGACY_V8_TEMPLATE_STORAGE_KEY = 'typesetting-app-v008-templates';
+const LEGACY_V9_PROJECT_INDEX_KEY = 'typesetting-app-v009-project-index';
+const LEGACY_V9_PROJECT_PREFIX = 'typesetting-app-v009-project:';
+const LEGACY_V9_CURRENT_PROJECT_KEY = 'typesetting-app-v009-current-project';
+const LEGACY_V9_TEMPLATE_STORAGE_KEY = 'typesetting-app-v009-templates';
 const LEGACY_V1_STORAGE_KEY = 'typesetting-app-v001';
-const MIGRATION_MARKER_KEY = 'typesetting-app-v009-migration-complete';
+const MIGRATION_MARKER_KEY = 'typesetting-app-v010-migration-complete';
 
 const DEFAULT_SETTINGS = Object.freeze({
   paperPreset: 'A5',
@@ -59,6 +59,16 @@ const DEFAULT_SETTINGS = Object.freeze({
   heading3SpaceAfter: 2,
   heading3PageBreakBefore: false,
   heading3KeepWithNext: true,
+  showToc: false,
+  tocTitle: '目次',
+  tocIncludeH1: true,
+  tocIncludeH2: true,
+  tocIncludeH3: false,
+  tocShowPageNumbers: true,
+  tocLeader: true,
+  tocTitleSize: 18,
+  tocFontSize: 9,
+  tocLineHeight: 15,
   showPageNumbers: true,
   pageNumberStart: 1,
   pageNumberPosition: 'bottom-center',
@@ -80,11 +90,11 @@ const DEFAULT_SETTINGS = Object.freeze({
 
 const SAMPLE_MANUSCRIPT = Object.freeze({
   title: 'サンプルタイトル',
-  subtitle: '章管理と全文編集の確認用原稿',
+  subtitle: '自動目次と直接PDF出力の確認用原稿',
   author: '著者名',
-  body: `# 第1章　組版アプリv009
+  body: `# 第1章　組版アプリv010
 
-これは、組版アプリv009の動作確認用原稿です。
+これは、組版アプリv010の動作確認用原稿です。
 
 右側の設定を変更すると、用紙サイズ、余白、フォント、文字サイズ、文字間、行間が中央のプレビューへ自動反映されます。
 
@@ -100,11 +110,13 @@ const SAMPLE_MANUSCRIPT = Object.freeze({
 
 章の追加、複製、削除、並び替えにも対応しています。JSON出力はバックアップや別端末への移動に使用してください。
 
-右上の「PDF保存」を押すと、現在のページプレビューをそのままPDFとして直接保存できます。PCの印刷設定は使用しません。`
+「目次を表示」をオンにすると、大見出し・中見出し・小見出しから目次を自動生成します。見出し名やページ位置を変更すると、目次も自動更新されます。
+
+右上の「PDF保存」を押すと、目次を含む現在のページプレビューをそのままPDFとして直接保存できます。PCの印刷設定は使用しません。`
 });
 
 const DEFAULT_STATE = Object.freeze({
-  projectName: '組版アプリ v009 サンプル',
+  projectName: '組版アプリ v010 サンプル',
   manuscript: { ...SAMPLE_MANUSCRIPT, paragraphs: [], chapters: [] },
   paragraphOverrides: {},
   settings: DEFAULT_SETTINGS,
@@ -173,7 +185,7 @@ let manuscriptEditorMode = 'full';
 let chapterModel = [];
 let selectedChapterIndex = -1;
 let isApplyingChapterEdit = false;
-const MANUSCRIPT_MODE_KEY = 'typesetting-app-v009-manuscript-mode';
+const MANUSCRIPT_MODE_KEY = 'typesetting-app-v010-manuscript-mode';
 
 window.addEventListener('DOMContentLoaded', init);
 
@@ -190,6 +202,7 @@ function init() {
   updateTextIndentControls();
   restoreSettingsAccordions();
   updateRunningContentControls();
+  updateTocControls();
   scheduleRender();
   refreshCurrentProjectStatus();
 }
@@ -220,6 +233,9 @@ function cacheElements() {
     'heading2SpaceAfter', 'heading2PageBreakBefore', 'heading2KeepWithNext',
     'heading3FontFamily', 'heading3Size', 'heading3Align', 'heading3SpaceBefore',
     'heading3SpaceAfter', 'heading3PageBreakBefore', 'heading3KeepWithNext',
+    'showToc', 'tocTitle', 'tocIncludeH1', 'tocIncludeH2', 'tocIncludeH3',
+    'tocShowPageNumbers', 'tocLeader', 'tocTitleSize', 'tocFontSize', 'tocLineHeight',
+    'tocDetectedSummary',
     'manuscriptModeFull', 'manuscriptModeChapters', 'fullEditorView', 'chapterEditorView',
     'editorModeGuidance', 'insertHeading1Btn', 'insertHeading2Btn', 'insertHeading3Btn',
     'chapterSummary', 'chapterList', 'addChapterBtn', 'addFirstChapterBtn', 'chapterEditCard',
@@ -247,6 +263,8 @@ function bindEvents() {
     els.heading2SpaceAfter, els.heading2PageBreakBefore, els.heading2KeepWithNext,
     els.heading3FontFamily, els.heading3Size, els.heading3Align, els.heading3SpaceBefore,
     els.heading3SpaceAfter, els.heading3PageBreakBefore, els.heading3KeepWithNext,
+    els.showToc, els.tocTitle, els.tocIncludeH1, els.tocIncludeH2, els.tocIncludeH3,
+    els.tocShowPageNumbers, els.tocLeader, els.tocTitleSize, els.tocFontSize, els.tocLineHeight,
     els.showPageNumbers, els.pageNumberStart, els.pageNumberPosition, els.firstPageNumber,
     els.showHeader, els.headerContent, els.headerCustomText, els.headerPosition, els.headerFirstPage,
     els.showFooterText, els.footerContent, els.footerCustomText, els.footerPosition, els.footerFirstPage
@@ -298,6 +316,8 @@ function bindEvents() {
   els.footerContent.addEventListener('change', updateRunningContentControls);
   els.showHeader.addEventListener('change', updateRunningContentControls);
   els.showFooterText.addEventListener('change', updateRunningContentControls);
+  els.showToc.addEventListener('change', updateTocControls);
+  els.tocShowPageNumbers.addEventListener('change', updateTocControls);
   els.settingsExpandAllBtn.addEventListener('click', () => setAllSettingsAccordions(true));
   els.settingsCollapseAllBtn.addEventListener('click', () => setAllSettingsAccordions(false));
   document.querySelectorAll('.settings-accordion').forEach((details) => {
@@ -398,7 +418,7 @@ function loadInitialProject() {
     applyState(migrated);
     saveCurrentProject(false);
     updateSaveStatus('v001データを移行済み');
-    showToast('v001の保存データをv009へ移行しました。');
+    showToast('v001の保存データをv010へ移行しました。');
     return;
   }
 
@@ -418,15 +438,15 @@ function migrateLegacyData() {
     return;
   }
 
-  const legacyIndex = readJsonFromStorage(LEGACY_V8_PROJECT_INDEX_KEY, []);
+  const legacyIndex = readJsonFromStorage(LEGACY_V9_PROJECT_INDEX_KEY, []);
   let migratedCount = 0;
   let mappedCurrentId = null;
-  const legacyCurrentId = safeStorageGet(LEGACY_V8_CURRENT_PROJECT_KEY);
+  const legacyCurrentId = safeStorageGet(LEGACY_V9_CURRENT_PROJECT_KEY);
 
   if (Array.isArray(legacyIndex)) {
     legacyIndex.forEach((item) => {
       if (!item?.id) return;
-      const raw = readJsonFromStorage(`${LEGACY_V8_PROJECT_PREFIX}${item.id}`, null);
+      const raw = readJsonFromStorage(`${LEGACY_V9_PROJECT_PREFIX}${item.id}`, null);
       if (!raw) return;
       const state = normalizeState(raw);
       state.metadata.appVersion = APP_VERSION;
@@ -440,7 +460,7 @@ function migrateLegacyData() {
     });
   }
 
-  const legacyTemplates = readJsonFromStorage(LEGACY_V8_TEMPLATE_STORAGE_KEY, []);
+  const legacyTemplates = readJsonFromStorage(LEGACY_V9_TEMPLATE_STORAGE_KEY, []);
   if (Array.isArray(legacyTemplates) && legacyTemplates.length) {
     safeStorageSet(TEMPLATE_STORAGE_KEY, JSON.stringify(legacyTemplates));
   }
@@ -449,7 +469,7 @@ function migrateLegacyData() {
   safeStorageSet(MIGRATION_MARKER_KEY, 'true');
 
   if (migratedCount > 0) {
-    showToast(`v008のプロジェクト${migratedCount}件をv009へ移行しました。`);
+    showToast(`v009のプロジェクト${migratedCount}件をv010へ移行しました。`);
   }
 }
 
@@ -851,11 +871,11 @@ function saveSettingsAccordionState() {
     const key = details.id || `section-${index}`;
     state[key] = details.open;
   });
-  safeStorageSet('typesetting-app-v009-settings-ui', JSON.stringify(state));
+  safeStorageSet('typesetting-app-v010-settings-ui', JSON.stringify(state));
 }
 
 function restoreSettingsAccordions() {
-  const state = readJsonFromStorage('typesetting-app-v009-settings-ui', null);
+  const state = readJsonFromStorage('typesetting-app-v010-settings-ui', null);
   if (!state || typeof state !== 'object') return;
   document.querySelectorAll('.settings-accordion').forEach((details, index) => {
     const key = details.id || `section-${index}`;
@@ -878,6 +898,38 @@ function updateRunningContentControls() {
   ['footerContent', 'footerPosition', 'footerFirstPage'].forEach((id) => {
     if (els[id]) els[id].disabled = !footerEnabled;
   });
+}
+
+
+function updateTocControls() {
+  const enabled = Boolean(els.showToc?.checked);
+  [
+    'tocTitle', 'tocIncludeH1', 'tocIncludeH2', 'tocIncludeH3',
+    'tocShowPageNumbers', 'tocTitleSize', 'tocFontSize', 'tocLineHeight'
+  ].forEach((id) => {
+    if (els[id]) els[id].disabled = !enabled;
+  });
+  if (els.tocLeader) els.tocLeader.disabled = !enabled || !els.tocShowPageNumbers.checked;
+  updateTocDetectedSummary();
+}
+
+function getTocIncludedLevels(settings = null) {
+  const source = settings || {
+    tocIncludeH1: Boolean(els.tocIncludeH1?.checked),
+    tocIncludeH2: Boolean(els.tocIncludeH2?.checked),
+    tocIncludeH3: Boolean(els.tocIncludeH3?.checked)
+  };
+  return [1, 2, 3].filter((level) => Boolean(source[`tocIncludeH${level}`]));
+}
+
+function updateTocDetectedSummary(state = null) {
+  if (!els.tocDetectedSummary) return;
+  const records = state?.manuscript?.paragraphs || paragraphRecords || [];
+  const counts = [1, 2, 3].map((level) => records.filter((record) => record.type === 'heading' && Number(record.level) === level).length);
+  const selected = getTocIncludedLevels(state?.settings || null);
+  const selectedCount = selected.reduce((sum, level) => sum + counts[level - 1], 0);
+  const breakdown = [`大${counts[0]}`, `中${counts[1]}`, `小${counts[2]}`].join('・');
+  els.tocDetectedSummary.textContent = `検出：${breakdown} ／ 目次対象 ${selectedCount}件`;
 }
 
 function handlePresetChange() {
@@ -918,8 +970,9 @@ function renderDocument() {
     const state = collectState();
     applyCssVariables(state.settings);
     applyPrintPageRule();
-    const fragments = paginate(state);
+    const fragments = paginateDocumentWithToc(state);
     buildPreview(fragments, state.settings, state.manuscript);
+    updateTocDetectedSummary(state);
     applyViewSettings();
     applyGuides();
     updateParagraphSelectionHighlight();
@@ -930,6 +983,165 @@ function renderDocument() {
   } finally {
     isRendering = false;
   }
+}
+
+
+function paginateDocumentWithToc(state) {
+  if (!state.settings.showToc) return paginate(state);
+
+  const records = Array.isArray(state.manuscript.paragraphs)
+    ? state.manuscript.paragraphs
+    : createParagraphRecords(state.manuscript.body);
+  const hasBodyContent = records.length > 0 || sanitizeBlankLineCount(state.manuscript.trailingBlankLines) > 0;
+  const titlePages = [];
+  if (state.settings.showDocumentHeading) {
+    titlePages.push([{ type: 'heading', data: state.manuscript }]);
+  }
+
+  const bodyState = {
+    ...state,
+    settings: {
+      ...state.settings,
+      showDocumentHeading: false,
+      bodyStartOnNewPage: false,
+      showToc: false
+    }
+  };
+  let bodyPages = hasBodyContent ? paginate(bodyState) : [];
+  if (bodyPages.length === 1 && bodyPages[0].length === 0) bodyPages = [];
+
+  const includedLevels = getTocIncludedLevels(state.settings);
+  const rawEntries = [];
+  bodyPages.forEach((fragments, bodyPageIndex) => {
+    fragments.forEach((fragment) => {
+      if (fragment.type !== 'body-heading') return;
+      const level = Math.min(3, Math.max(1, Number(fragment.record?.level) || 1));
+      if (!includedLevels.includes(level)) return;
+      rawEntries.push({
+        id: fragment.record?.id || createId('toc'),
+        level,
+        text: String(fragment.record?.text || ''),
+        bodyPageIndex
+      });
+    });
+  });
+
+  let tocPages = [];
+  let assumedTocPageCount = 1;
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const pageOffset = titlePages.length + assumedTocPageCount;
+    const entries = rawEntries.map((entry) => ({
+      ...entry,
+      pageNumber: Math.trunc(sanitizeNumber(state.settings.pageNumberStart, 1)) + pageOffset + entry.bodyPageIndex
+    }));
+    tocPages = paginateTocEntries(entries, state.settings);
+    if (tocPages.length === assumedTocPageCount) break;
+    assumedTocPageCount = tocPages.length;
+  }
+
+  return [...titlePages, ...tocPages, ...bodyPages];
+}
+
+function paginateTocEntries(entries, settings) {
+  const root = createMeasurePage();
+  const content = root.querySelector('.page-content');
+  const pages = [[]];
+  let pageIndex = 0;
+
+  const titleFragment = { type: 'toc-title', text: String(settings.tocTitle || '目次') };
+  const titleElement = createTocTitleElement(titleFragment.text, settings);
+  content.appendChild(titleElement);
+  pages[0].push(titleFragment);
+
+  if (!entries.length) {
+    const emptyFragment = { type: 'toc-empty', text: '目次に表示できる見出しがありません。本文に「# 大見出し」などを追加してください。' };
+    const emptyElement = createTocEmptyElement(emptyFragment.text, settings);
+    content.appendChild(emptyElement);
+    pages[0].push(emptyFragment);
+    root.remove();
+    return pages;
+  }
+
+  entries.forEach((entry) => {
+    const fragment = { type: 'toc-entry', entry: deepClone(entry) };
+    const element = createTocEntryElement(entry, settings);
+    content.appendChild(element);
+    if (!fits(content) && content.childElementCount > 1) {
+      element.remove();
+      pageIndex += 1;
+      pages.push([]);
+      content.replaceChildren();
+      const continuation = createTocContinuationElement(settings);
+      content.appendChild(continuation);
+      pages[pageIndex].push({ type: 'toc-continuation', text: String(settings.tocTitle || '目次') });
+      content.appendChild(element);
+    }
+    pages[pageIndex].push(fragment);
+  });
+
+  root.remove();
+  return pages;
+}
+
+function createTocTitleElement(text, settings) {
+  const element = document.createElement('h2');
+  element.className = 'toc-title';
+  element.textContent = text || '目次';
+  element.style.fontFamily = settings.heading1FontFamily || settings.fontFamily;
+  element.style.fontSize = `${sanitizeNumber(settings.tocTitleSize, 18)}pt`;
+  return element;
+}
+
+function createTocContinuationElement(settings) {
+  const element = document.createElement('div');
+  element.className = 'toc-continuation-title';
+  element.textContent = `${String(settings.tocTitle || '目次')}（続き）`;
+  element.style.fontFamily = settings.heading1FontFamily || settings.fontFamily;
+  element.style.fontSize = `${Math.max(9, sanitizeNumber(settings.tocFontSize, 9) + 1)}pt`;
+  return element;
+}
+
+function createTocEntryElement(entry, settings) {
+  const row = document.createElement('div');
+  row.className = `toc-entry toc-level-${entry.level}`;
+  row.style.fontFamily = settings.fontFamily;
+  row.style.fontSize = `${sanitizeNumber(settings.tocFontSize, 9)}pt`;
+  row.style.minHeight = `${sanitizeNumber(settings.tocLineHeight, 15)}pt`;
+  row.style.lineHeight = `${sanitizeNumber(settings.tocLineHeight, 15)}pt`;
+
+  const showPageNumber = Boolean(settings.tocShowPageNumbers);
+  const showLeader = showPageNumber && Boolean(settings.tocLeader);
+  row.classList.toggle('toc-no-page-number', !showPageNumber);
+  row.classList.toggle('toc-no-leader', showPageNumber && !showLeader);
+
+  const title = document.createElement('span');
+  title.className = 'toc-entry-title';
+  title.textContent = entry.text;
+  row.appendChild(title);
+
+  if (showLeader) {
+    const leader = document.createElement('span');
+    leader.className = 'toc-entry-leader';
+    leader.setAttribute('aria-hidden', 'true');
+    row.appendChild(leader);
+  }
+
+  if (showPageNumber) {
+    const page = document.createElement('span');
+    page.className = 'toc-entry-page';
+    page.textContent = String(entry.pageNumber);
+    row.appendChild(page);
+  }
+  return row;
+}
+
+function createTocEmptyElement(text, settings) {
+  const element = document.createElement('p');
+  element.className = 'toc-empty-message';
+  element.textContent = text;
+  element.style.fontFamily = settings.fontFamily;
+  element.style.fontSize = `${sanitizeNumber(settings.tocFontSize, 9)}pt`;
+  return element;
 }
 
 function paginate(state) {
@@ -1487,6 +1699,14 @@ function buildPreview(pageFragments, settings, manuscript) {
       if (fragment.type === 'heading') {
         const heading = createHeadingElement(fragment.data);
         if (heading) content.appendChild(heading);
+      } else if (fragment.type === 'toc-title') {
+        content.appendChild(createTocTitleElement(fragment.text, settings));
+      } else if (fragment.type === 'toc-continuation') {
+        content.appendChild(createTocContinuationElement(settings));
+      } else if (fragment.type === 'toc-entry') {
+        content.appendChild(createTocEntryElement(fragment.entry, settings));
+      } else if (fragment.type === 'toc-empty') {
+        content.appendChild(createTocEmptyElement(fragment.text, settings));
       } else if (fragment.type === 'body-heading') {
         content.appendChild(createBodyHeadingElement(fragment.record, settings, {
           blankLinesBefore: fragment.blankLinesBefore
@@ -1692,6 +1912,16 @@ function collectSettings() {
     heading3SpaceAfter: sanitizeNumber(els.heading3SpaceAfter.value, 2),
     heading3PageBreakBefore: els.heading3PageBreakBefore.checked,
     heading3KeepWithNext: els.heading3KeepWithNext.checked,
+    showToc: els.showToc.checked,
+    tocTitle: els.tocTitle.value.trim() || '目次',
+    tocIncludeH1: els.tocIncludeH1.checked,
+    tocIncludeH2: els.tocIncludeH2.checked,
+    tocIncludeH3: els.tocIncludeH3.checked,
+    tocShowPageNumbers: els.tocShowPageNumbers.checked,
+    tocLeader: els.tocLeader.checked,
+    tocTitleSize: sanitizeNumber(els.tocTitleSize.value, 18),
+    tocFontSize: sanitizeNumber(els.tocFontSize.value, 9),
+    tocLineHeight: sanitizeNumber(els.tocLineHeight.value, 15),
     showPageNumbers: els.showPageNumbers.checked,
     pageNumberStart: Math.trunc(sanitizeNumber(els.pageNumberStart.value, 1)),
     pageNumberPosition: els.pageNumberPosition.value,
@@ -1773,6 +2003,17 @@ function applySettingsToInputs(settings) {
     els[`heading${level}PageBreakBefore`].checked = Boolean(normalized[`heading${level}PageBreakBefore`]);
     els[`heading${level}KeepWithNext`].checked = Boolean(normalized[`heading${level}KeepWithNext`]);
   });
+  els.showToc.checked = Boolean(normalized.showToc);
+  els.tocTitle.value = normalized.tocTitle || '目次';
+  els.tocIncludeH1.checked = Boolean(normalized.tocIncludeH1);
+  els.tocIncludeH2.checked = Boolean(normalized.tocIncludeH2);
+  els.tocIncludeH3.checked = Boolean(normalized.tocIncludeH3);
+  els.tocShowPageNumbers.checked = Boolean(normalized.tocShowPageNumbers);
+  els.tocLeader.checked = Boolean(normalized.tocLeader);
+  els.tocTitleSize.value = normalized.tocTitleSize;
+  els.tocFontSize.value = normalized.tocFontSize;
+  els.tocLineHeight.value = normalized.tocLineHeight;
+  updateTocControls();
   els.showPageNumbers.checked = Boolean(normalized.showPageNumbers);
   els.pageNumberStart.value = normalized.pageNumberStart;
   els.pageNumberPosition.value = normalized.pageNumberPosition;

@@ -4,8 +4,8 @@
 <head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1" name="viewport"/>
-<meta content="出版社向け簡易組版アプリ v009" name="description"/>
-<title>組版アプリ v009</title>
+<meta content="出版社向け簡易組版アプリ v010" name="description"/>
+<title>組版アプリ v010</title>
 <link href="styles.css" rel="stylesheet"/>
 <link rel="icon" href="data:,">
 </head>
@@ -14,7 +14,7 @@
 <header class="topbar">
 <div class="brand-block">
 <strong>組版アプリ</strong>
-<span class="version-badge">v009</span>
+<span class="version-badge">v010</span>
 </div>
 <label class="project-name-wrap">
 <span>プロジェクト名</span>
@@ -54,7 +54,7 @@
       </label>
       <label class="field compact-gap">
         <span>サブタイトル</span>
-        <input id="subtitleInput" placeholder="不要な場合は空欄" type="text" value="章管理と全文編集の確認用原稿"/>
+        <input id="subtitleInput" placeholder="不要な場合は空欄" type="text" value="自動目次と直接PDF出力の確認用原稿"/>
       </label>
       <label class="field compact-gap no-margin">
         <span>著者名</span>
@@ -92,9 +92,9 @@
       </div>
       <label class="field body-field full-body-field">
         <span>本文全体</span>
-        <textarea id="bodyInput" placeholder="ここに本文を貼り付けてください。" spellcheck="false"># 第1章　組版アプリv009
+        <textarea id="bodyInput" placeholder="ここに本文を貼り付けてください。" spellcheck="false"># 第1章　組版アプリv010
 
-これは、組版アプリv009の動作確認用原稿です。
+これは、組版アプリv010の動作確認用原稿です。
 
 右側の設定を変更すると、用紙サイズ、余白、フォント、文字サイズ、文字間、行間が中央のプレビューへ自動反映されます。
 
@@ -110,7 +110,9 @@
 
 章の追加、複製、削除、並び替えにも対応しています。JSON出力はバックアップや別端末への移動に使用してください。
 
-右上の「PDF保存」を押すと、現在のページプレビューをそのままPDFとして直接保存できます。PCの印刷設定は使用しません。</textarea>
+「目次を表示」をオンにすると、大見出し・中見出し・小見出しから目次を自動生成します。見出し名やページ位置を変更すると、目次も自動更新されます。
+
+右上の「PDF保存」を押すと、目次を含む現在のページプレビューをそのままPDFとして直接保存できます。PCの印刷設定は使用しません。</textarea>
       </label>
       <div class="input-help-card">
         <strong>見出しの書き方</strong>
@@ -486,6 +488,31 @@
 </select>
 </label>
 </div></details>
+<details class="settings-accordion" open=""><summary><span class="settings-summary-title">目次</span><span class="settings-summary-hint">開閉</span></summary><div class="settings-accordion-body">
+<div class="feature-intro-card">
+<strong>見出しから自動生成</strong>
+<p>タイトルの次、本文の前に目次を挿入します。見出しやページ位置を変更すると自動更新されます。</p>
+</div>
+<label class="check-row primary-check"><input id="showToc" type="checkbox"/><span>目次を表示する</span></label>
+<p class="helper-text toc-detected-summary" id="tocDetectedSummary">検出：大0・中0・小0 ／ 目次対象 0件</p>
+<label class="field"><span>目次タイトル</span><input id="tocTitle" maxlength="80" type="text" value="目次"/></label>
+<div class="setting-subsection compact-subsection">
+<h3>目次へ載せる見出し</h3>
+<div class="toc-level-options">
+<label class="check-row"><input checked id="tocIncludeH1" type="checkbox"/><span>大見出し（#）</span></label>
+<label class="check-row"><input checked id="tocIncludeH2" type="checkbox"/><span>中見出し（##）</span></label>
+<label class="check-row"><input id="tocIncludeH3" type="checkbox"/><span>小見出し（###）</span></label>
+</div>
+</div>
+<div class="field-grid two">
+<label class="field compact"><span>タイトルサイズ（pt）</span><input id="tocTitleSize" max="48" min="8" step="0.5" type="number" value="18"/></label>
+<label class="field compact"><span>本文サイズ（pt）</span><input id="tocFontSize" max="30" min="6" step="0.5" type="number" value="9"/></label>
+<label class="field compact"><span>行間（pt）</span><input id="tocLineHeight" max="40" min="8" step="0.5" type="number" value="15"/></label>
+</div>
+<label class="check-row"><input checked id="tocShowPageNumbers" type="checkbox"/><span>目次にページ番号を表示</span></label>
+<label class="check-row"><input checked id="tocLeader" type="checkbox"/><span>見出し名とページ番号の間に点線を表示</span></label>
+<p class="helper-text">目次を表示する場合、タイトルは独立したページになり、目次の後から本文が始まります。</p>
+</div></details>
 <details class="settings-accordion" open=""><summary><span class="settings-summary-title">ページ</span><span class="settings-summary-hint">開閉</span></summary><div class="settings-accordion-body">
 <div class="setting-subsection">
 <h3>ページ番号</h3>
@@ -552,7 +579,7 @@
 </label>
 <button class="button modal-primary" id="saveTemplateBtn" type="button">現在の設定を保存</button>
 </div>
-<p class="helper-text template-note">テンプレートには用紙、余白、本文、見出し、タイトル、ページ設定だけを保存します。原稿内容は含まれません。</p>
+<p class="helper-text template-note">テンプレートには用紙、余白、本文、見出し、タイトル、目次、ページ設定だけを保存します。原稿内容は含まれません。</p>
 <div class="library-list" id="templateList"></div>
 </section>
 </div>
