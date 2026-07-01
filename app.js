@@ -1,24 +1,24 @@
 'use strict';
 
-const APP_VERSION = 'v016';
-const SCHEMA_VERSION = 16;
+const APP_VERSION = 'v017';
+const SCHEMA_VERSION = 17;
 const AUTOSAVE_DELAY = 700;
 const MAX_MEDIA_ASSETS = 20;
 const MAX_MEDIA_DATA_CHARS = 3_200_000;
 const MAX_MEDIA_SOURCE_BYTES = 12 * 1024 * 1024;
 const MEDIA_MARKER_PATTERN = /^\s*\[\[figure:([a-zA-Z0-9_-]+)\]\]\s*$/;
 
-const PROJECT_INDEX_KEY = 'typesetting-app-v016-project-index';
-const PROJECT_PREFIX = 'typesetting-app-v016-project:';
-const CURRENT_PROJECT_KEY = 'typesetting-app-v016-current-project';
-const TEMPLATE_STORAGE_KEY = 'typesetting-app-v016-templates';
+const PROJECT_INDEX_KEY = 'typesetting-app-v017-project-index';
+const PROJECT_PREFIX = 'typesetting-app-v017-project:';
+const CURRENT_PROJECT_KEY = 'typesetting-app-v017-current-project';
+const TEMPLATE_STORAGE_KEY = 'typesetting-app-v017-templates';
 
-const LEGACY_V15_PROJECT_INDEX_KEY = 'typesetting-app-v015-project-index';
-const LEGACY_V15_PROJECT_PREFIX = 'typesetting-app-v015-project:';
-const LEGACY_V15_CURRENT_PROJECT_KEY = 'typesetting-app-v015-current-project';
-const LEGACY_V15_TEMPLATE_STORAGE_KEY = 'typesetting-app-v015-templates';
+const LEGACY_V16_PROJECT_INDEX_KEY = 'typesetting-app-v016-project-index';
+const LEGACY_V16_PROJECT_PREFIX = 'typesetting-app-v016-project:';
+const LEGACY_V16_CURRENT_PROJECT_KEY = 'typesetting-app-v016-current-project';
+const LEGACY_V16_TEMPLATE_STORAGE_KEY = 'typesetting-app-v016-templates';
 const LEGACY_V1_STORAGE_KEY = 'typesetting-app-v001';
-const MIGRATION_MARKER_KEY = 'typesetting-app-v016-migration-complete';
+const MIGRATION_MARKER_KEY = 'typesetting-app-v017-migration-complete';
 
 const DEFAULT_SETTINGS = Object.freeze({
   paperPreset: 'A5',
@@ -103,11 +103,11 @@ const DEFAULT_SETTINGS = Object.freeze({
 
 const SAMPLE_MANUSCRIPT = Object.freeze({
   title: 'サンプルタイトル',
-  subtitle: '前付・後付・奥付対応の確認用原稿',
+  subtitle: '出力前チェック対応の確認用原稿',
   author: '著者名',
-  body: `# 第1章　組版アプリv016
+  body: `# 第1章　組版アプリv017
 
-これは、組版アプリv016の動作確認用原稿です。用紙設定から「縦書き・右綴じ」へ切り替えると、同じ原稿を縦書きで確認できます。
+これは、組版アプリv017の動作確認用原稿です。用紙設定から「縦書き・右綴じ」へ切り替えると、同じ原稿を縦書きで確認できます。
 
 文字を選択して、**太字**、《《傍点》》、｜組版《くみはん》、__下線__を設定できます。記号はプレビューやPDFには表示されません。
 
@@ -145,7 +145,7 @@ const DEFAULT_BOOK_MATTER = Object.freeze({
 });
 
 const DEFAULT_STATE = Object.freeze({
-  projectName: '組版アプリ v016 サンプル',
+  projectName: '組版アプリ v017 サンプル',
   manuscript: { ...SAMPLE_MANUSCRIPT, paragraphs: [], chapters: [], media: [], matter: deepClone(DEFAULT_BOOK_MATTER) },
   paragraphOverrides: {},
   settings: DEFAULT_SETTINGS,
@@ -234,8 +234,11 @@ let manuscriptCheckTimer = null;
 let mediaAssets = [];
 let mediaInsertTarget = 'bodyInput';
 let selectedMediaId = null;
+let preflightIssues = [];
+let preflightFilter = 'all';
+let preflightTimer = null;
 const MAX_MANUSCRIPT_ISSUES = 300;
-const MANUSCRIPT_MODE_KEY = 'typesetting-app-v016-manuscript-mode';
+const MANUSCRIPT_MODE_KEY = 'typesetting-app-v017-manuscript-mode';
 
 window.addEventListener('DOMContentLoaded', init);
 
@@ -258,6 +261,7 @@ function init() {
   updateMediaUi();
   updateBookStructureUi();
   scheduleManuscriptCheck(0);
+  schedulePreflightCheck(350);
   scheduleRender();
   refreshCurrentProjectStatus();
 }
@@ -316,7 +320,12 @@ function cacheElements() {
     'authorProfileEnabled', 'authorProfileTitle', 'authorProfileBody', 'authorProfileStatus',
     'colophonEnabled', 'colophonHeading', 'colophonBookTitle', 'colophonAuthor',
     'colophonPublicationDate', 'colophonEdition', 'colophonIssuedBy', 'colophonPublisher',
-    'colophonContact', 'colophonCopyright', 'colophonNotes', 'colophonStatus'
+    'colophonContact', 'colophonCopyright', 'colophonNotes', 'colophonStatus',
+    'preflightBtn', 'preflightBadge', 'preflightModal', 'preflightStatusCard',
+    'preflightStatusIcon', 'preflightStatusTitle', 'preflightStatusText',
+    'preflightErrors', 'preflightWarnings', 'preflightInfo', 'preflightPages',
+    'rerunPreflightBtn', 'preflightList', 'preflightEmpty', 'preflightFooterNote',
+    'preflightPdfBtn'
   ];
 
   ids.forEach((id) => {
@@ -478,8 +487,15 @@ function bindEvents() {
   els.exportBtn.addEventListener('click', exportJson);
   els.importBtn.addEventListener('click', () => els.importFile.click());
   els.importFile.addEventListener('change', importJson);
-  els.printBtn.addEventListener('click', exportPdf);
+  els.printBtn.addEventListener('click', handlePdfSaveRequest);
   els.manuscriptCheckBtn.addEventListener('click', openManuscriptCheckModal);
+  els.preflightBtn.addEventListener('click', openPreflightModal);
+  els.rerunPreflightBtn.addEventListener('click', () => runPreflightCheck({ announce: true }));
+  els.preflightList.addEventListener('click', handlePreflightAction);
+  els.preflightPdfBtn.addEventListener('click', exportPdfFromPreflight);
+  document.querySelectorAll('[data-preflight-filter]').forEach((button) => {
+    button.addEventListener('click', () => setPreflightFilter(button.dataset.preflightFilter));
+  });
   els.rerunManuscriptCheckBtn.addEventListener('click', () => runManuscriptCheck({ announce: true }));
   els.fixSafeManuscriptIssuesBtn.addEventListener('click', fixSafeManuscriptIssues);
   els.manuscriptCheckList.addEventListener('click', handleManuscriptCheckAction);
@@ -545,7 +561,7 @@ function loadInitialProject() {
     applyState(migrated);
     saveCurrentProject(false);
     updateSaveStatus('v001データを移行済み');
-    showToast('v001の保存データをv016へ移行しました。');
+    showToast('v001の保存データをv017へ移行しました。');
     return;
   }
 
@@ -565,15 +581,15 @@ function migrateLegacyData() {
     return;
   }
 
-  const legacyIndex = readJsonFromStorage(LEGACY_V15_PROJECT_INDEX_KEY, []);
+  const legacyIndex = readJsonFromStorage(LEGACY_V16_PROJECT_INDEX_KEY, []);
   let migratedCount = 0;
   let mappedCurrentId = null;
-  const legacyCurrentId = safeStorageGet(LEGACY_V15_CURRENT_PROJECT_KEY);
+  const legacyCurrentId = safeStorageGet(LEGACY_V16_CURRENT_PROJECT_KEY);
 
   if (Array.isArray(legacyIndex)) {
     legacyIndex.forEach((item) => {
       if (!item?.id) return;
-      const raw = readJsonFromStorage(`${LEGACY_V15_PROJECT_PREFIX}${item.id}`, null);
+      const raw = readJsonFromStorage(`${LEGACY_V16_PROJECT_PREFIX}${item.id}`, null);
       if (!raw) return;
       const state = normalizeState(raw);
       state.metadata.appVersion = APP_VERSION;
@@ -587,7 +603,7 @@ function migrateLegacyData() {
     });
   }
 
-  const legacyTemplates = readJsonFromStorage(LEGACY_V15_TEMPLATE_STORAGE_KEY, []);
+  const legacyTemplates = readJsonFromStorage(LEGACY_V16_TEMPLATE_STORAGE_KEY, []);
   if (Array.isArray(legacyTemplates) && legacyTemplates.length) {
     safeStorageSet(TEMPLATE_STORAGE_KEY, JSON.stringify(legacyTemplates));
   }
@@ -596,7 +612,7 @@ function migrateLegacyData() {
   safeStorageSet(MIGRATION_MARKER_KEY, 'true');
 
   if (migratedCount > 0) {
-    showToast(`v015のプロジェクト${migratedCount}件をv016へ移行しました。`);
+    showToast(`v016のプロジェクト${migratedCount}件をv017へ移行しました。`);
   }
 }
 
@@ -1798,6 +1814,7 @@ function renderDocument() {
     applyGuides();
     updateParagraphSelectionHighlight();
     els.pageCount.textContent = `${fragments.length}ページ`;
+    schedulePreflightCheck(220);
   } catch (error) {
     console.error(error);
     showToast('プレビュー生成中にエラーが発生しました。設定値を確認してください。');
@@ -4177,6 +4194,382 @@ async function importJson(event) {
     console.error(error);
     showToast('JSONファイルの形式が正しくありません。');
   }
+}
+
+
+function schedulePreflightCheck(delay = 300) {
+  clearTimeout(preflightTimer);
+  preflightTimer = setTimeout(() => {
+    if (isRendering || document.body.classList.contains('pdf-exporting')) {
+      schedulePreflightCheck(250);
+      return;
+    }
+    runPreflightCheck({ announce: false });
+  }, Math.max(0, delay));
+}
+
+function openPreflightModal() {
+  renderDocument();
+  requestAnimationFrame(() => {
+    runPreflightCheck({ announce: false });
+    openModal('preflightModal');
+  });
+}
+
+function runPreflightCheck({ announce = false } = {}) {
+  preflightIssues = collectPreflightIssues();
+  updatePreflightBadge();
+  renderPreflightResults();
+  if (announce) {
+    const errors = preflightIssues.filter((issue) => issue.severity === 'error').length;
+    const warnings = preflightIssues.filter((issue) => issue.severity === 'warning').length;
+    if (errors) showToast(`出力を止めるエラーが${errors}件あります。`);
+    else if (warnings) showToast(`要確認項目が${warnings}件あります。`);
+    else showToast('PDF保存を妨げる問題はありません。');
+  }
+  return preflightIssues;
+}
+
+function collectPreflightIssues() {
+  const state = collectState();
+  const settings = state.settings;
+  const manuscript = state.manuscript;
+  const matter = normalizeBookMatter(manuscript.matter);
+  const papers = Array.from(els.pages.querySelectorAll('.paper'));
+  const issues = [];
+  let issueIndex = 0;
+  const add = (severity, category, title, message, action = null, location = '') => {
+    issues.push({
+      id: `preflight-${++issueIndex}`,
+      severity: ['error', 'warning', 'info'].includes(severity) ? severity : 'info',
+      category: String(category || '確認'), title: String(title || '確認項目'),
+      message: String(message || ''), action, location: String(location || '')
+    });
+  };
+
+  const pageWidth = sanitizeNumber(settings.pageWidth, 0);
+  const pageHeight = sanitizeNumber(settings.pageHeight, 0);
+  const contentWidth = pageWidth - sanitizeNumber(settings.marginLeft, 0) - sanitizeNumber(settings.marginRight, 0);
+  const contentHeight = pageHeight - sanitizeNumber(settings.marginTop, 0) - sanitizeNumber(settings.marginBottom, 0);
+
+  if (pageWidth < 50 || pageHeight < 50 || pageWidth > 500 || pageHeight > 500) {
+    add('error', '用紙', '用紙サイズを確認してください', `現在の設定は ${pageWidth} × ${pageHeight} mm です。50～500mmの範囲を目安にしてください。`, { type: 'focus', target: 'pageWidth' }, '組版設定');
+  }
+  if (contentWidth <= 20 || contentHeight <= 20) {
+    add('error', '余白', '本文を配置できる領域が不足しています', `本文領域は約 ${Math.max(0, contentWidth).toFixed(1)} × ${Math.max(0, contentHeight).toFixed(1)} mm です。用紙または余白を見直してください。`, { type: 'focus', target: 'marginTop' }, '組版設定');
+  }
+  const smallMargins = [settings.marginTop, settings.marginBottom, settings.marginLeft, settings.marginRight].filter((value) => sanitizeNumber(value, 0) < 5);
+  if (smallMargins.length) {
+    add('warning', '余白', '5mm未満の余白があります', '裁ち落としやプリンターの印刷不可領域を考慮し、必要な余白が確保されているか確認してください。', { type: 'focus', target: 'marginTop' }, '組版設定');
+  }
+  if (sanitizeNumber(settings.fontSize, 9) < 7) {
+    add('warning', '本文', '本文文字が小さく設定されています', `${settings.fontSize}ptです。印刷後に読みやすい大きさか実寸で確認してください。`, { type: 'focus', target: 'fontSize' }, '組版設定');
+  }
+  if (sanitizeNumber(settings.lineHeight, 15) < sanitizeNumber(settings.fontSize, 9) * 1.1) {
+    add('warning', '本文', '行間が文字サイズに対して狭い可能性があります', `文字 ${settings.fontSize}pt／行間 ${settings.lineHeight}ptです。文字の重なりや読みづらさを確認してください。`, { type: 'focus', target: 'lineHeight' }, '組版設定');
+  }
+
+  if (settings.showDocumentHeading && !String(manuscript.title || '').trim()) {
+    add('warning', '書籍情報', '扉を表示していますがタイトルが空です', 'タイトルを入力するか、組版設定の「タイトルを表示」をOFFにしてください。', { type: 'focus', target: 'titleInput' }, '扉');
+  }
+  if (!String(state.projectName || '').trim()) {
+    add('warning', '保存', 'プロジェクト名が空です', 'JSON・PDFのファイル名を識別しやすくするため、プロジェクト名を入力してください。', { type: 'focus', target: 'projectName' }, '上部メニュー');
+  }
+
+  const records = Array.isArray(manuscript.paragraphs) ? manuscript.paragraphs : createParagraphRecords(manuscript.body);
+  const bodyText = String(manuscript.body || '').replace(/\[\[figure:[^\]]+\]\]/g, '').replace(/^#{1,3}\s*/gm, '').replace(/[\s*_＿《》｜]+/g, '');
+  const enabledMatterHasText = [matter.foreword, matter.afterword, matter.authorProfile].some((section) => section.enabled && String(section.body || '').trim()) || matter.colophon.enabled;
+  if (!bodyText && !enabledMatterHasText) {
+    add('warning', '原稿', '本文が入力されていません', 'タイトルだけの出力でない場合は、全文編集または章別編集から本文を入力してください。', { type: 'manuscript' }, '本文');
+  }
+
+  const headings = records.filter((record) => record.type === 'heading');
+  if (settings.showToc && !headings.some((record) => getTocIncludedLevels(settings).includes(Number(record.level) || 1))) {
+    add('warning', '目次', '目次に掲載できる見出しがありません', '目次対象の見出し階層をONにするか、本文へ見出しを追加してください。', { type: 'focus', target: 'showToc' }, '目次');
+  }
+  let seenH1 = false;
+  let seenH2 = false;
+  headings.forEach((heading) => {
+    const level = Number(heading.level) || 1;
+    if (level === 1) { seenH1 = true; seenH2 = false; }
+    if (level === 2 && !seenH1) add('warning', '見出し', '大見出しより前に中見出しがあります', `「${heading.text || '無題'}」の階層を確認してください。`, { type: 'manuscript', search: heading.text }, '本文');
+    if (level === 2) seenH2 = true;
+    if (level === 3 && !seenH2) add('warning', '見出し', '中見出しより前に小見出しがあります', `「${heading.text || '無題'}」の階層を確認してください。`, { type: 'manuscript', search: heading.text }, '本文');
+  });
+  const h1Counts = new Map();
+  headings.filter((record) => Number(record.level) === 1).forEach((record) => {
+    const key = String(record.text || '').trim();
+    if (key) h1Counts.set(key, (h1Counts.get(key) || 0) + 1);
+  });
+  const duplicateH1 = [...h1Counts.entries()].filter(([, count]) => count > 1);
+  if (duplicateH1.length) {
+    add('info', '見出し', '同じ章タイトルが複数あります', duplicateH1.map(([title, count]) => `「${title}」${count}件`).join('、'), { type: 'manuscript', search: duplicateH1[0][0] }, '本文');
+  }
+
+  [['foreword', matter.foreword, 'まえがき'], ['afterword', matter.afterword, 'あとがき'], ['authorProfile', matter.authorProfile, '著者紹介']].forEach(([key, section, label]) => {
+    if (section.enabled && !String(section.body || '').trim()) {
+      add('warning', '書籍構成', `${label}を使用中ですが本文が空です`, '内容を入力するか、書籍構成でこのページをOFFにしてください。', { type: 'matter', key }, label);
+    }
+  });
+  if (matter.colophon.enabled) {
+    if (!String(matter.colophon.bookTitle || manuscript.title || '').trim()) add('warning', '奥付', '奥付の書名が空です', '書籍タイトルを入力するか、奥付へ書名を入力してください。', { type: 'matter', key: 'colophon' }, '奥付');
+    if (!String(matter.colophon.author || manuscript.author || '').trim()) add('warning', '奥付', '奥付の著者が空です', '著者名を入力するか、奥付へ著者を入力してください。', { type: 'matter', key: 'colophon' }, '奥付');
+    if (!String(matter.colophon.publicationDate || '').trim()) add('info', '奥付', '発行日が未入力です', '発行情報として必要な場合は、奥付へ発行日を入力してください。', { type: 'matter', key: 'colophon' }, '奥付');
+    if (!String(matter.colophon.publisher || '').trim()) add('info', '奥付', '発行所が未入力です', '発行所を掲載する場合は入力してください。', { type: 'matter', key: 'colophon' }, '奥付');
+  }
+
+  const allTextSources = [manuscript.body, matter.foreword.body, matter.afterword.body, matter.authorProfile.body].map((value) => String(value || ''));
+  const referencedMedia = new Set();
+  allTextSources.forEach((source) => {
+    for (const match of source.matchAll(/\[\[figure:([a-zA-Z0-9_-]+)\]\]/g)) referencedMedia.add(match[1]);
+  });
+  const mediaMap = new Map((manuscript.media || []).map((asset) => [String(asset.id), asset]));
+  referencedMedia.forEach((id) => {
+    if (!mediaMap.has(id)) add('error', '画像', '本文から参照している画像が見つかりません', `画像ID「${id}」が画像ライブラリにありません。記号を削除するか画像を再挿入してください。`, { type: 'manuscript', search: `[[figure:${id}]]` }, '本文');
+  });
+  (manuscript.media || []).forEach((asset) => {
+    const label = asset.fileName || '画像';
+    if (!String(asset.dataUrl || '').startsWith('data:image/')) {
+      add('error', '画像', '画像データを読み込めません', `「${label}」の画像データが壊れている可能性があります。`, { type: 'media', id: asset.id }, '画像・図表');
+      return;
+    }
+    if (!referencedMedia.has(String(asset.id))) {
+      add('info', '画像', '本文で使われていない画像があります', `「${label}」は画像ライブラリに保存されていますが、本文中に挿入されていません。`, { type: 'media', id: asset.id }, '画像・図表');
+    }
+    if (!String(asset.alt || '').trim()) {
+      add('info', '画像', '代替テキストが未入力です', `「${label}」に内容を説明する代替テキストを設定すると、管理しやすくなります。`, { type: 'media', id: asset.id }, '画像・図表');
+    }
+    const widthMm = Math.max(1, contentWidth * (sanitizeNumber(asset.widthPercent, 100) / 100));
+    const estimatedPpi = sanitizeNumber(asset.width, 0) / (widthMm / 25.4);
+    if (estimatedPpi && estimatedPpi < 150) {
+      add('warning', '画像', '画像の解像度が低い可能性があります', `「${label}」は配置幅から約${Math.round(estimatedPpi)}ppiと推定されます。印刷時の粗さを実寸で確認してください。`, { type: 'media', id: asset.id }, '画像・図表');
+    } else if (estimatedPpi && estimatedPpi < 220) {
+      add('info', '画像', '画像解像度を確認してください', `「${label}」は配置幅から約${Math.round(estimatedPpi)}ppiと推定されます。高精細印刷では元画像の確認を推奨します。`, { type: 'media', id: asset.id }, '画像・図表');
+    }
+  });
+
+  if (!papers.length) {
+    add('error', 'ページ', '出力できるページがありません', '原稿または書籍構成を入力して、プレビューを生成してください。', { type: 'manuscript' }, 'プレビュー');
+  }
+  papers.forEach((paper, index) => {
+    const pageNumber = index + 1;
+    const content = paper.querySelector('.page-content');
+    if (!content) return;
+    const visibleText = String(content.textContent || '').replace(/\s+/g, '');
+    const hasVisual = Boolean(content.querySelector('img, .figure-block, .colophon-page'));
+    if (!visibleText && !hasVisual) {
+      add('info', 'ページ', '内容のないページがあります', `${pageNumber}ページ目は本文領域が空です。意図した空白ページか確認してください。`, { type: 'page', page: pageNumber }, `${pageNumber}ページ`);
+    }
+    const overflowX = content.scrollWidth > content.clientWidth + 4;
+    const overflowY = content.scrollHeight > content.clientHeight + 4;
+    let childOverflow = false;
+    const cRect = content.getBoundingClientRect();
+    Array.from(content.children).forEach((child) => {
+      const rect = child.getBoundingClientRect();
+      if (rect.right > cRect.right + 5 || rect.left < cRect.left - 5 || rect.bottom > cRect.bottom + 5 || rect.top < cRect.top - 5) childOverflow = true;
+    });
+    if (overflowX || overflowY || childOverflow) {
+      add('error', 'ページ', '本文領域からはみ出している可能性があります', `${pageNumber}ページ目で文字または画像のはみ出しを検出しました。余白、文字サイズ、個別設定を確認してください。`, { type: 'page', page: pageNumber }, `${pageNumber}ページ`);
+    }
+    if (content.querySelector('.figure-missing')) {
+      add('error', '画像', '表示できない画像があります', `${pageNumber}ページ目の画像を再登録してください。`, { type: 'page', page: pageNumber }, `${pageNumber}ページ`);
+    }
+  });
+
+  const firstFont = String(settings.fontFamily || '').split(',')[0].trim().replace(/^['\"]|['\"]$/g, '');
+  if (firstFont && document.fonts?.check && !document.fonts.check(`12px "${firstFont.replace(/"/g, '')}"`)) {
+    add('warning', 'フォント', '先頭指定フォントを確認できませんでした', `「${firstFont}」がこのPCで利用できず、代替フォントで表示されている可能性があります。`, { type: 'focus', target: 'fontFamily' }, '組版設定');
+  }
+  if (papers.length > 60) {
+    add('warning', 'PDF', 'ページ数が多いためPDF生成に時間がかかります', `${papers.length}ページあります。保存中は画面を閉じずにお待ちください。`, { type: 'page', page: 1 }, 'PDF');
+  }
+  add('info', 'PDF', 'PDFは画像固定型で生成されます', 'アプリ内レイアウトとの一致を優先しています。文字検索・コピー、PDF/X、CMYK、フォント埋め込み検査には対応していません。', null, '出力仕様');
+
+  return deduplicatePreflightIssues(issues);
+}
+
+function deduplicatePreflightIssues(issues) {
+  const seen = new Set();
+  return issues.filter((issue) => {
+    const key = `${issue.severity}|${issue.category}|${issue.title}|${issue.location}|${issue.message}`;
+    if (seen.has(key)) return false;
+    seen.add(key); return true;
+  });
+}
+
+function updatePreflightBadge() {
+  if (!els.preflightBadge || !els.preflightBtn) return;
+  const errors = preflightIssues.filter((issue) => issue.severity === 'error').length;
+  const warnings = preflightIssues.filter((issue) => issue.severity === 'warning').length;
+  const count = errors + warnings;
+  els.preflightBadge.textContent = count ? (count > 99 ? '99+' : String(count)) : '✓';
+  els.preflightBadge.classList.toggle('clear', count === 0);
+  els.preflightBtn.classList.toggle('has-errors', errors > 0);
+  els.preflightBtn.classList.toggle('has-warnings', warnings > 0);
+  els.preflightBtn.title = errors
+    ? `PDF保存前に修正が必要なエラーが${errors}件あります`
+    : warnings ? `要確認項目が${warnings}件あります` : 'PDF保存を妨げる問題はありません';
+}
+
+function setPreflightFilter(filter) {
+  preflightFilter = ['all', 'error', 'warning', 'info'].includes(filter) ? filter : 'all';
+  document.querySelectorAll('[data-preflight-filter]').forEach((button) => {
+    const active = button.dataset.preflightFilter === preflightFilter;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-pressed', String(active));
+  });
+  renderPreflightResults();
+}
+
+function renderPreflightResults() {
+  if (!els.preflightList) return;
+  const errors = preflightIssues.filter((issue) => issue.severity === 'error').length;
+  const warnings = preflightIssues.filter((issue) => issue.severity === 'warning').length;
+  const infos = preflightIssues.filter((issue) => issue.severity === 'info').length;
+  const pageCount = els.pages.querySelectorAll('.paper').length;
+  els.preflightErrors.textContent = `${errors}件`;
+  els.preflightWarnings.textContent = `${warnings}件`;
+  els.preflightInfo.textContent = `${infos}件`;
+  els.preflightPages.textContent = `${pageCount}ページ`;
+  els.preflightStatusCard.classList.toggle('has-errors', errors > 0);
+  els.preflightStatusCard.classList.toggle('has-warnings', warnings > 0);
+  if (errors) {
+    els.preflightStatusIcon.textContent = '!';
+    els.preflightStatusTitle.textContent = 'PDF保存前に修正が必要です';
+    els.preflightStatusText.textContent = `${errors}件のエラーがあります。項目の「確認する」から修正箇所へ移動できます。`;
+  } else if (warnings) {
+    els.preflightStatusIcon.textContent = '△';
+    els.preflightStatusTitle.textContent = 'PDF保存は可能ですが、確認項目があります';
+    els.preflightStatusText.textContent = `${warnings}件の要確認項目があります。意図した設定であれば、そのまま保存できます。`;
+  } else {
+    els.preflightStatusIcon.textContent = '✓';
+    els.preflightStatusTitle.textContent = 'PDF保存を妨げる問題はありません';
+    els.preflightStatusText.textContent = '最終的な文字・画像・ページ順を目視確認してから保存してください。';
+  }
+  els.preflightPdfBtn.disabled = errors > 0;
+  els.preflightPdfBtn.textContent = errors ? 'エラー修正後に保存できます' : 'PDFを保存';
+
+  const filtered = preflightFilter === 'all' ? preflightIssues : preflightIssues.filter((issue) => issue.severity === preflightFilter);
+  els.preflightList.replaceChildren();
+  els.preflightEmpty.hidden = preflightIssues.length !== 0;
+  els.preflightEmpty.querySelector('strong').textContent = 'PDF保存を妨げる問題はありません';
+  if (!filtered.length) {
+    if (preflightIssues.length) {
+      const empty = document.createElement('div');
+      empty.className = 'preflight-filter-empty';
+      empty.textContent = 'この条件に該当する項目はありません。';
+      els.preflightList.appendChild(empty);
+    }
+    return;
+  }
+  filtered.forEach((issue) => {
+    const row = document.createElement('article');
+    row.className = `preflight-issue ${issue.severity}`;
+    const head = document.createElement('div');
+    head.className = 'preflight-issue-head';
+    const main = document.createElement('div');
+    const meta = document.createElement('div');
+    meta.className = 'preflight-issue-meta';
+    const severity = document.createElement('span');
+    severity.className = `preflight-severity-badge ${issue.severity}`;
+    severity.textContent = issue.severity === 'error' ? 'エラー' : issue.severity === 'warning' ? '要確認' : '情報';
+    const category = document.createElement('span');
+    category.className = 'preflight-category-badge'; category.textContent = issue.category;
+    meta.append(severity, category);
+    if (issue.location) {
+      const location = document.createElement('span');
+      location.className = 'preflight-location-badge'; location.textContent = issue.location;
+      meta.appendChild(location);
+    }
+    const title = document.createElement('strong');
+    title.className = 'preflight-issue-title'; title.textContent = issue.title;
+    const message = document.createElement('p');
+    message.className = 'preflight-issue-message'; message.textContent = issue.message;
+    main.append(meta, title, message); head.appendChild(main);
+    if (issue.action) {
+      const button = document.createElement('button');
+      button.type = 'button'; button.className = 'button modal-secondary preflight-issue-action';
+      button.dataset.preflightIssueId = issue.id; button.textContent = '確認する';
+      head.appendChild(button);
+    }
+    row.appendChild(head); els.preflightList.appendChild(row);
+  });
+}
+
+function handlePreflightAction(event) {
+  const button = event.target.closest('[data-preflight-issue-id]');
+  if (!button) return;
+  const issue = preflightIssues.find((item) => item.id === button.dataset.preflightIssueId);
+  if (!issue?.action) return;
+  navigateToPreflightAction(issue.action);
+}
+
+function navigateToPreflightAction(action) {
+  closeModal('preflightModal');
+  setTimeout(() => {
+    if (action.type === 'focus') {
+      const target = document.getElementById(action.target);
+      if (!target) return;
+      const details = target.closest('details');
+      if (details) details.open = true;
+      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      target.classList.add('preflight-highlight');
+      target.focus({ preventScroll: true });
+      setTimeout(() => target.classList.remove('preflight-highlight'), 1900);
+    } else if (action.type === 'manuscript') {
+      setManuscriptEditorMode('full');
+      const search = String(action.search || '');
+      if (search) {
+        const index = els.bodyInput.value.indexOf(search);
+        if (index >= 0) els.bodyInput.setSelectionRange(index, index + search.length);
+      }
+      els.bodyInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      els.bodyInput.focus({ preventScroll: true });
+      els.bodyInput.classList.add('preflight-highlight');
+      setTimeout(() => els.bodyInput.classList.remove('preflight-highlight'), 1900);
+    } else if (action.type === 'matter') {
+      openBookStructureModal();
+      requestAnimationFrame(() => {
+        const card = document.querySelector(`[data-matter-card="${CSS.escape(action.key || '')}"]`);
+        card?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        card?.classList.add('preflight-highlight');
+        setTimeout(() => card?.classList.remove('preflight-highlight'), 1900);
+      });
+    } else if (action.type === 'media') {
+      selectedMediaId = action.id || null;
+      openMediaManager(manuscriptEditorMode === 'chapters' && selectedChapterIndex >= 0 ? 'chapterBodyInput' : 'bodyInput', selectedMediaId);
+    } else if (action.type === 'page') {
+      const paper = els.pages.querySelector(`.paper[data-page="${Number(action.page) || 1}"]`);
+      paper?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      paper?.classList.add('preflight-highlight');
+      setTimeout(() => paper?.classList.remove('preflight-highlight'), 1900);
+    }
+  }, 150);
+}
+
+async function handlePdfSaveRequest() {
+  if (els.printBtn.disabled) return;
+  renderDocument();
+  await waitForFrames(2);
+  const issues = runPreflightCheck({ announce: false });
+  const errors = issues.filter((issue) => issue.severity === 'error').length;
+  if (errors) {
+    openModal('preflightModal');
+    showToast(`PDF保存前に修正が必要なエラーが${errors}件あります。`);
+    return;
+  }
+  await exportPdf();
+}
+
+async function exportPdfFromPreflight() {
+  const errors = preflightIssues.filter((issue) => issue.severity === 'error').length;
+  if (errors) {
+    showToast('エラーを修正してからPDFを保存してください。');
+    return;
+  }
+  closeModal('preflightModal');
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  await exportPdf();
 }
 
 async function exportPdf() {

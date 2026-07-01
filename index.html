@@ -4,8 +4,8 @@
 <head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1" name="viewport"/>
-<meta content="出版社向け簡易組版アプリ v016" name="description"/>
-<title>組版アプリ v016</title>
+<meta content="出版社向け簡易組版アプリ v017" name="description"/>
+<title>組版アプリ v017</title>
 <link href="styles.css" rel="stylesheet"/>
 <link rel="icon" href="data:,">
 </head>
@@ -14,7 +14,7 @@
 <header class="topbar">
 <div class="brand-block">
 <strong>組版アプリ</strong>
-<span class="version-badge">v016</span>
+<span class="version-badge">v017</span>
 </div>
 <label class="project-name-wrap">
 <span>プロジェクト名</span>
@@ -31,6 +31,7 @@
 <button class="button check-button" id="manuscriptCheckBtn" type="button">原稿チェック <span class="check-count-badge" id="manuscriptCheckBadge">0</span></button>
 <button class="button secondary book-structure-button" id="bookStructureBtn" type="button">書籍構成 <span class="structure-count-badge" id="bookStructureBadge">0</span></button>
 <button class="button secondary media-manager-button" id="mediaManagerBtn" type="button">画像・図表 <span class="media-count-badge" id="mediaCountBadge">0</span></button>
+<button class="button preflight-button" id="preflightBtn" type="button">出力前チェック <span class="preflight-count-badge" id="preflightBadge">–</span></button>
 <button class="button primary" id="printBtn" type="button">PDF保存</button>
 <input accept="application/json,.json" hidden="" id="importFile" type="file"/>
 </div>
@@ -109,9 +110,9 @@
       </div>
       <label class="field body-field full-body-field">
         <span>本文全体</span>
-        <textarea id="bodyInput" placeholder="ここに本文を貼り付けてください。" spellcheck="false"># 第1章　組版アプリv016
+        <textarea id="bodyInput" placeholder="ここに本文を貼り付けてください。" spellcheck="false"># 第1章　組版アプリv017
 
-これは、組版アプリv016の動作確認用原稿です。用紙設定から「縦書き・右綴じ」へ切り替えると、同じ原稿を縦書きで確認できます。
+これは、組版アプリv017の動作確認用原稿です。用紙設定から「縦書き・右綴じ」へ切り替えると、同じ原稿を縦書きで確認できます。
 
 文字を選択して、**太字**、《《傍点》》、｜組版《くみはん》、__下線__を設定できます。記号はプレビューやPDFには表示されません。
 
@@ -155,6 +156,10 @@
         <div>
           <strong>前付・後付・奥付</strong>
           <span>上部の「書籍構成」から、使うページだけをONにして入力します。</span>
+        </div>
+        <div>
+          <strong>PDF保存前の確認</strong>
+          <span>上部の「出力前チェック」で、画像・余白・空白ページなどをまとめて確認できます。</span>
         </div>
         <small>文字装飾や画像位置の記号は、プレビュー・PDFには表示されません。</small>
       </div>
@@ -813,6 +818,58 @@
 </section>
 </div>
 
+
+<div class="modal-backdrop" hidden id="preflightModal">
+<section aria-labelledby="preflightModalTitle" aria-modal="true" class="modal-card preflight-modal-card" role="dialog">
+<header class="modal-header">
+<div>
+<p class="eyebrow">PRE-FLIGHT CHECK</p>
+<h2 id="preflightModalTitle">出力前チェック</h2>
+</div>
+<button aria-label="閉じる" class="icon-button" data-close-modal="preflightModal" type="button">×</button>
+</header>
+<div class="preflight-scroll">
+<div class="preflight-status-card" id="preflightStatusCard">
+<div class="preflight-status-icon" id="preflightStatusIcon" aria-hidden="true">✓</div>
+<div>
+<strong id="preflightStatusTitle">誌面を確認しています</strong>
+<p id="preflightStatusText">用紙、本文、画像、書籍構成、ページのはみ出しをまとめて確認します。</p>
+</div>
+</div>
+<div class="preflight-summary-grid" aria-label="出力前チェック概要">
+<div class="preflight-summary-item error"><span>エラー</span><strong id="preflightErrors">0件</strong></div>
+<div class="preflight-summary-item warning"><span>要確認</span><strong id="preflightWarnings">0件</strong></div>
+<div class="preflight-summary-item info"><span>情報</span><strong id="preflightInfo">0件</strong></div>
+<div class="preflight-summary-item pages"><span>ページ</span><strong id="preflightPages">0ページ</strong></div>
+</div>
+<div class="preflight-toolbar">
+<div class="preflight-filter-group" role="group" aria-label="表示するチェック結果">
+<button class="preflight-filter-button active" data-preflight-filter="all" type="button">すべて</button>
+<button class="preflight-filter-button" data-preflight-filter="error" type="button">エラー</button>
+<button class="preflight-filter-button" data-preflight-filter="warning" type="button">要確認</button>
+<button class="preflight-filter-button" data-preflight-filter="info" type="button">情報</button>
+</div>
+<button class="button modal-secondary" id="rerunPreflightBtn" type="button">再チェック</button>
+</div>
+<div class="preflight-list" id="preflightList"></div>
+<div class="preflight-empty-state" id="preflightEmpty" hidden>
+<div aria-hidden="true">✓</div>
+<strong>PDF保存を妨げる問題はありません</strong>
+<p>内容を目視確認したうえでPDFを保存してください。</p>
+</div>
+</div>
+<footer class="preflight-modal-footer">
+<div>
+<strong>現在のPDFは確認・共有向けの画像固定型です</strong>
+<p id="preflightFooterNote">文字検索・PDF/X・CMYK・フォント埋め込み検査には対応していません。</p>
+</div>
+<div class="preflight-footer-actions">
+<button class="button modal-secondary" data-close-modal="preflightModal" type="button">閉じる</button>
+<button class="button modal-primary" id="preflightPdfBtn" type="button">PDFを保存</button>
+</div>
+</footer>
+</section>
+</div>
 <div class="modal-backdrop" hidden id="manuscriptCheckModal">
 <section aria-labelledby="manuscriptCheckModalTitle" aria-modal="true" class="modal-card check-modal-card" role="dialog">
 <header class="modal-header">
