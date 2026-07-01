@@ -1,20 +1,20 @@
 'use strict';
 
-const APP_VERSION = 'v006';
-const SCHEMA_VERSION = 6;
+const APP_VERSION = 'v007';
+const SCHEMA_VERSION = 7;
 const AUTOSAVE_DELAY = 700;
 
-const PROJECT_INDEX_KEY = 'typesetting-app-v006-project-index';
-const PROJECT_PREFIX = 'typesetting-app-v006-project:';
-const CURRENT_PROJECT_KEY = 'typesetting-app-v006-current-project';
-const TEMPLATE_STORAGE_KEY = 'typesetting-app-v006-templates';
+const PROJECT_INDEX_KEY = 'typesetting-app-v007-project-index';
+const PROJECT_PREFIX = 'typesetting-app-v007-project:';
+const CURRENT_PROJECT_KEY = 'typesetting-app-v007-current-project';
+const TEMPLATE_STORAGE_KEY = 'typesetting-app-v007-templates';
 
-const LEGACY_V5_PROJECT_INDEX_KEY = 'typesetting-app-v005-project-index';
-const LEGACY_V5_PROJECT_PREFIX = 'typesetting-app-v005-project:';
-const LEGACY_V5_CURRENT_PROJECT_KEY = 'typesetting-app-v005-current-project';
-const LEGACY_V5_TEMPLATE_STORAGE_KEY = 'typesetting-app-v005-templates';
+const LEGACY_V6_PROJECT_INDEX_KEY = 'typesetting-app-v006-project-index';
+const LEGACY_V6_PROJECT_PREFIX = 'typesetting-app-v006-project:';
+const LEGACY_V6_CURRENT_PROJECT_KEY = 'typesetting-app-v006-current-project';
+const LEGACY_V6_TEMPLATE_STORAGE_KEY = 'typesetting-app-v006-templates';
 const LEGACY_V1_STORAGE_KEY = 'typesetting-app-v001';
-const MIGRATION_MARKER_KEY = 'typesetting-app-v006-migration-complete';
+const MIGRATION_MARKER_KEY = 'typesetting-app-v007-migration-complete';
 
 const DEFAULT_SETTINGS = Object.freeze({
   paperPreset: 'A5',
@@ -60,7 +60,19 @@ const DEFAULT_SETTINGS = Object.freeze({
   heading3PageBreakBefore: false,
   heading3KeepWithNext: true,
   showPageNumbers: true,
+  pageNumberStart: 1,
+  pageNumberPosition: 'bottom-center',
   firstPageNumber: false,
+  showHeader: false,
+  headerContent: 'chapter',
+  headerCustomText: '',
+  headerPosition: 'outer',
+  headerFirstPage: false,
+  showFooterText: false,
+  footerContent: 'custom',
+  footerCustomText: '',
+  footerPosition: 'center',
+  footerFirstPage: false,
   viewMode: 'single',
   zoom: 0.7,
   showGuides: true
@@ -70,9 +82,9 @@ const SAMPLE_MANUSCRIPT = Object.freeze({
   title: 'サンプルタイトル',
   subtitle: '見出し・字下げ・空行保持の確認用原稿',
   author: '著者名',
-  body: `# 第1章　組版アプリv006
+  body: `# 第1章　組版アプリv007
 
-これは、組版アプリv006の動作確認用原稿です。
+これは、組版アプリv007の動作確認用原稿です。
 
 右側の設定を変更すると、用紙サイズ、余白、フォント、文字サイズ、文字間、行間が中央のプレビューへ自動反映されます。
 
@@ -92,7 +104,7 @@ JSON出力は、バックアップや別端末への移動に使用してくだ�
 });
 
 const DEFAULT_STATE = Object.freeze({
-  projectName: '組版アプリ v006 サンプル',
+  projectName: '組版アプリ v007 サンプル',
   manuscript: { ...SAMPLE_MANUSCRIPT, paragraphs: [] },
   paragraphOverrides: {},
   settings: DEFAULT_SETTINGS,
@@ -168,6 +180,8 @@ function init() {
   applyViewSettings();
   updateBlankLineControls();
   updateTextIndentControls();
+  restoreSettingsAccordions();
+  updateRunningContentControls();
   scheduleRender();
   refreshCurrentProjectStatus();
 }
@@ -180,7 +194,10 @@ function cacheElements() {
     'currentProjectStatus', 'paperPreset', 'pageWidth', 'pageHeight', 'marginTop',
     'marginBottom', 'marginLeft', 'marginRight', 'fontFamily', 'fontSize', 'lineHeight',
     'letterSpacing', 'useTextIndent', 'textIndent', 'textAlign', 'preserveBlankLines', 'blankLineScale', 'titleSize', 'titleBottom', 'titleAlign', 'showDocumentHeading', 'bodyStartOnNewPage',
-    'showPageNumbers', 'firstPageNumber', 'viewMode', 'zoomSelect', 'toggleGuidesBtn',
+    'showPageNumbers', 'pageNumberStart', 'pageNumberPosition', 'firstPageNumber',
+    'showHeader', 'headerContent', 'headerCustomText', 'headerPosition', 'headerFirstPage',
+    'showFooterText', 'footerContent', 'footerCustomText', 'footerPosition', 'footerFirstPage',
+    'settingsExpandAllBtn', 'settingsCollapseAllBtn', 'viewMode', 'zoomSelect', 'toggleGuidesBtn',
     'resetSettingsBtn', 'measureRoot', 'toast', 'previewViewport', 'projectsModal',
     'projectList', 'projectStorageSummary', 'createProjectFromModalBtn', 'templatesModal',
     'templateNameInput', 'saveTemplateBtn', 'templateList', 'paragraphSettingsFieldset',
@@ -215,7 +232,9 @@ function bindEvents() {
     els.heading2SpaceAfter, els.heading2PageBreakBefore, els.heading2KeepWithNext,
     els.heading3FontFamily, els.heading3Size, els.heading3Align, els.heading3SpaceBefore,
     els.heading3SpaceAfter, els.heading3PageBreakBefore, els.heading3KeepWithNext,
-    els.showPageNumbers, els.firstPageNumber
+    els.showPageNumbers, els.pageNumberStart, els.pageNumberPosition, els.firstPageNumber,
+    els.showHeader, els.headerContent, els.headerCustomText, els.headerPosition, els.headerFirstPage,
+    els.showFooterText, els.footerContent, els.footerCustomText, els.footerPosition, els.footerFirstPage
   ];
 
   renderInputs.forEach((element) => {
@@ -243,6 +262,15 @@ function bindEvents() {
   els.zoomSelect.addEventListener('change', handleViewSettingChange);
   els.preserveBlankLines.addEventListener('change', updateBlankLineControls);
   els.useTextIndent.addEventListener('change', updateTextIndentControls);
+  els.headerContent.addEventListener('change', updateRunningContentControls);
+  els.footerContent.addEventListener('change', updateRunningContentControls);
+  els.showHeader.addEventListener('change', updateRunningContentControls);
+  els.showFooterText.addEventListener('change', updateRunningContentControls);
+  els.settingsExpandAllBtn.addEventListener('click', () => setAllSettingsAccordions(true));
+  els.settingsCollapseAllBtn.addEventListener('click', () => setAllSettingsAccordions(false));
+  document.querySelectorAll('.settings-accordion').forEach((details) => {
+    details.addEventListener('toggle', saveSettingsAccordionState);
+  });
 
   els.toggleGuidesBtn.addEventListener('click', () => {
     const pressed = els.toggleGuidesBtn.getAttribute('aria-pressed') === 'true';
@@ -342,7 +370,7 @@ function loadInitialProject() {
     applyState(migrated);
     saveCurrentProject(false);
     updateSaveStatus('v001データを移行済み');
-    showToast('v001の保存データをv006へ移行しました。');
+    showToast('v001の保存データをv007へ移行しました。');
     return;
   }
 
@@ -362,15 +390,15 @@ function migrateLegacyData() {
     return;
   }
 
-  const legacyIndex = readJsonFromStorage(LEGACY_V5_PROJECT_INDEX_KEY, []);
+  const legacyIndex = readJsonFromStorage(LEGACY_V6_PROJECT_INDEX_KEY, []);
   let migratedCount = 0;
   let mappedCurrentId = null;
-  const legacyCurrentId = safeStorageGet(LEGACY_V5_CURRENT_PROJECT_KEY);
+  const legacyCurrentId = safeStorageGet(LEGACY_V6_CURRENT_PROJECT_KEY);
 
   if (Array.isArray(legacyIndex)) {
     legacyIndex.forEach((item) => {
       if (!item?.id) return;
-      const raw = readJsonFromStorage(`${LEGACY_V5_PROJECT_PREFIX}${item.id}`, null);
+      const raw = readJsonFromStorage(`${LEGACY_V6_PROJECT_PREFIX}${item.id}`, null);
       if (!raw) return;
       const state = normalizeState(raw);
       state.metadata.appVersion = APP_VERSION;
@@ -384,7 +412,7 @@ function migrateLegacyData() {
     });
   }
 
-  const legacyTemplates = readJsonFromStorage(LEGACY_V5_TEMPLATE_STORAGE_KEY, []);
+  const legacyTemplates = readJsonFromStorage(LEGACY_V6_TEMPLATE_STORAGE_KEY, []);
   if (Array.isArray(legacyTemplates) && legacyTemplates.length) {
     safeStorageSet(TEMPLATE_STORAGE_KEY, JSON.stringify(legacyTemplates));
   }
@@ -393,7 +421,7 @@ function migrateLegacyData() {
   safeStorageSet(MIGRATION_MARKER_KEY, 'true');
 
   if (migratedCount > 0) {
-    showToast(`v005のプロジェクト${migratedCount}件をv006へ移行しました。`);
+    showToast(`v006のプロジェクト${migratedCount}件をv007へ移行しました。`);
   }
 }
 
@@ -405,6 +433,48 @@ function updateBlankLineControls() {
 function updateTextIndentControls() {
   if (!els.textIndent || !els.useTextIndent) return;
   els.textIndent.disabled = !els.useTextIndent.checked;
+}
+
+function setAllSettingsAccordions(open) {
+  document.querySelectorAll('.settings-accordion').forEach((details) => {
+    details.open = open;
+  });
+  saveSettingsAccordionState();
+}
+
+function saveSettingsAccordionState() {
+  const state = {};
+  document.querySelectorAll('.settings-accordion').forEach((details, index) => {
+    const key = details.id || `section-${index}`;
+    state[key] = details.open;
+  });
+  safeStorageSet('typesetting-app-v007-settings-ui', JSON.stringify(state));
+}
+
+function restoreSettingsAccordions() {
+  const state = readJsonFromStorage('typesetting-app-v007-settings-ui', null);
+  if (!state || typeof state !== 'object') return;
+  document.querySelectorAll('.settings-accordion').forEach((details, index) => {
+    const key = details.id || `section-${index}`;
+    if (typeof state[key] === 'boolean') details.open = state[key];
+  });
+}
+
+function updateRunningContentControls() {
+  const headerEnabled = Boolean(els.showHeader?.checked);
+  const footerEnabled = Boolean(els.showFooterText?.checked);
+  if (els.headerCustomText) {
+    els.headerCustomText.disabled = !headerEnabled || els.headerContent.value !== 'custom';
+  }
+  if (els.footerCustomText) {
+    els.footerCustomText.disabled = !footerEnabled || els.footerContent.value !== 'custom';
+  }
+  ['headerContent', 'headerPosition', 'headerFirstPage'].forEach((id) => {
+    if (els[id]) els[id].disabled = !headerEnabled;
+  });
+  ['footerContent', 'footerPosition', 'footerFirstPage'].forEach((id) => {
+    if (els[id]) els[id].disabled = !footerEnabled;
+  });
 }
 
 function handlePresetChange() {
@@ -446,7 +516,7 @@ function renderDocument() {
     applyCssVariables(state.settings);
     applyPrintPageRule();
     const fragments = paginate(state);
-    buildPreview(fragments, state.settings);
+    buildPreview(fragments, state.settings, state.manuscript);
     applyViewSettings();
     applyGuides();
     updateParagraphSelectionHighlight();
@@ -994,8 +1064,9 @@ function createParagraphRecords(text) {
   }));
 }
 
-function buildPreview(pageFragments, settings) {
+function buildPreview(pageFragments, settings, manuscript) {
   els.pages.replaceChildren();
+  let runningChapter = '';
 
   pageFragments.forEach((fragments, index) => {
     const paper = document.createElement('article');
@@ -1004,7 +1075,12 @@ function buildPreview(pageFragments, settings) {
     const content = document.createElement('div');
     content.className = 'page-content';
 
+    let pageChapter = runningChapter;
     fragments.forEach((fragment) => {
+      if (fragment.type === 'body-heading' && Number(fragment.record?.level) === 1) {
+        pageChapter = String(fragment.record.text || '');
+        runningChapter = pageChapter;
+      }
       if (fragment.type === 'heading') {
         const heading = createHeadingElement(fragment.data);
         if (heading) content.appendChild(heading);
@@ -1028,16 +1104,74 @@ function buildPreview(pageFragments, settings) {
       }
     });
 
-    if (settings.showPageNumbers && (settings.firstPageNumber || index > 0)) {
-      const pageNumber = document.createElement('div');
-      pageNumber.className = 'page-number';
-      pageNumber.textContent = String(index + 1);
-      paper.appendChild(pageNumber);
-    }
-
+    appendRunningElements(paper, index, settings, manuscript, pageChapter);
     paper.appendChild(content);
     els.pages.appendChild(paper);
   });
+}
+
+function appendRunningElements(paper, pageIndex, settings, manuscript, chapterTitle) {
+  const headerArea = createMarginArea('header');
+  const footerArea = createMarginArea('footer');
+  const isFirstPage = pageIndex === 0;
+
+  if (settings.showHeader && (!isFirstPage || settings.headerFirstPage)) {
+    const text = resolveRunningText(settings.headerContent, settings.headerCustomText, manuscript, chapterTitle);
+    if (text) addMarginItem(headerArea, settings.headerPosition, text, 'running-text', pageIndex);
+  }
+
+  if (settings.showFooterText && (!isFirstPage || settings.footerFirstPage)) {
+    const text = resolveRunningText(settings.footerContent, settings.footerCustomText, manuscript, chapterTitle);
+    if (text) addMarginItem(footerArea, settings.footerPosition, text, 'running-text', pageIndex);
+  }
+
+  if (settings.showPageNumbers && (!isFirstPage || settings.firstPageNumber)) {
+    const value = Math.trunc(sanitizeNumber(settings.pageNumberStart, 1)) + pageIndex;
+    const [areaName, position] = String(settings.pageNumberPosition || 'bottom-center').split('-');
+    const area = areaName === 'top' ? headerArea : footerArea;
+    addMarginItem(area, position || 'center', String(value), 'page-number-item', pageIndex);
+  }
+
+  if (headerArea.dataset.hasItems === 'true') paper.appendChild(headerArea);
+  if (footerArea.dataset.hasItems === 'true') paper.appendChild(footerArea);
+}
+
+function createMarginArea(kind) {
+  const area = document.createElement('div');
+  area.className = `page-margin-area page-${kind}-area`;
+  ['left', 'center', 'right'].forEach((position) => {
+    const slot = document.createElement('div');
+    slot.className = `page-margin-slot slot-${position}`;
+    slot.dataset.slot = position;
+    area.appendChild(slot);
+  });
+  return area;
+}
+
+function addMarginItem(area, position, text, className, pageIndex) {
+  const resolved = resolveMarginPosition(position, pageIndex);
+  const slot = area.querySelector(`[data-slot="${resolved}"]`);
+  if (!slot) return;
+  const item = document.createElement('span');
+  item.className = className;
+  item.textContent = text;
+  slot.appendChild(item);
+  area.dataset.hasItems = 'true';
+}
+
+function resolveMarginPosition(position, pageIndex) {
+  if (position === 'center') return 'center';
+  const isOddPage = pageIndex % 2 === 0;
+  if (position === 'outer') return isOddPage ? 'right' : 'left';
+  if (position === 'inner') return isOddPage ? 'left' : 'right';
+  return ['left', 'right'].includes(position) ? position : 'center';
+}
+
+function resolveRunningText(contentType, customText, manuscript, chapterTitle) {
+  if (contentType === 'title') return String(manuscript?.title || '');
+  if (contentType === 'author') return String(manuscript?.author || '');
+  if (contentType === 'chapter') return String(chapterTitle || '');
+  return String(customText || '');
 }
 
 function applyCssVariables(settings) {
@@ -1155,7 +1289,19 @@ function collectSettings() {
     heading3PageBreakBefore: els.heading3PageBreakBefore.checked,
     heading3KeepWithNext: els.heading3KeepWithNext.checked,
     showPageNumbers: els.showPageNumbers.checked,
+    pageNumberStart: Math.trunc(sanitizeNumber(els.pageNumberStart.value, 1)),
+    pageNumberPosition: els.pageNumberPosition.value,
     firstPageNumber: els.firstPageNumber.checked,
+    showHeader: els.showHeader.checked,
+    headerContent: els.headerContent.value,
+    headerCustomText: els.headerCustomText.value,
+    headerPosition: els.headerPosition.value,
+    headerFirstPage: els.headerFirstPage.checked,
+    showFooterText: els.showFooterText.checked,
+    footerContent: els.footerContent.value,
+    footerCustomText: els.footerCustomText.value,
+    footerPosition: els.footerPosition.value,
+    footerFirstPage: els.footerFirstPage.checked,
     viewMode: els.viewMode.value,
     zoom: sanitizeNumber(els.zoomSelect.value, 0.7),
     showGuides: els.toggleGuidesBtn.getAttribute('aria-pressed') === 'true'
@@ -1221,7 +1367,20 @@ function applySettingsToInputs(settings) {
     els[`heading${level}KeepWithNext`].checked = Boolean(normalized[`heading${level}KeepWithNext`]);
   });
   els.showPageNumbers.checked = Boolean(normalized.showPageNumbers);
+  els.pageNumberStart.value = normalized.pageNumberStart;
+  els.pageNumberPosition.value = normalized.pageNumberPosition;
   els.firstPageNumber.checked = Boolean(normalized.firstPageNumber);
+  els.showHeader.checked = Boolean(normalized.showHeader);
+  els.headerContent.value = normalized.headerContent;
+  els.headerCustomText.value = normalized.headerCustomText;
+  els.headerPosition.value = normalized.headerPosition;
+  els.headerFirstPage.checked = Boolean(normalized.headerFirstPage);
+  els.showFooterText.checked = Boolean(normalized.showFooterText);
+  els.footerContent.value = normalized.footerContent;
+  els.footerCustomText.value = normalized.footerCustomText;
+  els.footerPosition.value = normalized.footerPosition;
+  els.footerFirstPage.checked = Boolean(normalized.footerFirstPage);
+  updateRunningContentControls();
   els.viewMode.value = normalized.viewMode;
   els.zoomSelect.value = String(normalized.zoom);
   els.toggleGuidesBtn.setAttribute('aria-pressed', String(Boolean(normalized.showGuides)));
@@ -1417,6 +1576,7 @@ function selectParagraph(paragraphId, shouldScroll = true) {
   const index = editable.findIndex((record) => record.id === paragraphId);
   if (index < 0) return;
   selectedParagraphId = paragraphId;
+  if (els.paragraphSettingsFieldset) els.paragraphSettingsFieldset.open = true;
   updateParagraphControls();
   updateParagraphSelectionHighlight();
 

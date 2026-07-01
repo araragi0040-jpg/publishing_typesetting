@@ -1,69 +1,63 @@
-<!doctype html>
+<!DOCTYPE html>
+
 <html lang="ja">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="出版社向け簡易組版アプリ v006">
-  <title>組版アプリ v006</title>
-  <link rel="stylesheet" href="styles.css">
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1" name="viewport"/>
+<meta content="出版社向け簡易組版アプリ v007" name="description"/>
+<title>組版アプリ v007</title>
+<link href="styles.css" rel="stylesheet"/>
 </head>
 <body>
-  <div class="app-shell">
-    <header class="topbar">
-      <div class="brand-block">
-        <strong>組版アプリ</strong>
-        <span class="version-badge">v006</span>
-      </div>
+<div class="app-shell">
+<header class="topbar">
+<div class="brand-block">
+<strong>組版アプリ</strong>
+<span class="version-badge">v007</span>
+</div>
+<label class="project-name-wrap">
+<span>プロジェクト名</span>
+<input id="projectName" maxlength="80" type="text" value="新規組版データ"/>
+</label>
+<div aria-label="ファイル操作" class="toolbar">
+<button class="button secondary" id="newBtn" type="button">新規</button>
+<button class="button secondary" id="projectsBtn" type="button">プロジェクト</button>
+<button class="button secondary" id="saveBtn" type="button">保存</button>
+<button class="button secondary" id="duplicateBtn" type="button">複製</button>
+<button class="button secondary" id="templatesBtn" type="button">テンプレート</button>
+<button class="button secondary" id="exportBtn" type="button">JSON出力</button>
+<button class="button secondary" id="importBtn" type="button">JSON読込</button>
+<button class="button primary" id="printBtn" type="button">PDF出力</button>
+<input accept="application/json,.json" hidden="" id="importFile" type="file"/>
+</div>
+</header>
+<main class="workspace">
+<section aria-labelledby="manuscriptTitle" class="panel manuscript-panel">
+<div class="panel-header">
+<div>
+<p class="eyebrow">MANUSCRIPT</p>
+<h1 id="manuscriptTitle">原稿入力</h1>
+</div>
+<span class="count-badge" id="charCount">0文字</span>
+</div>
+<div class="panel-scroll">
+<label class="field">
+<span>タイトル</span>
+<input id="titleInput" placeholder="書名・記事タイトル" type="text" value="サンプルタイトル"/>
+</label>
+<label class="field">
+<span>サブタイトル</span>
+<input id="subtitleInput" placeholder="不要な場合は空欄" type="text" value="見出し・字下げ・空行保持の確認用原稿"/>
+</label>
+<label class="field">
+<span>著者名</span>
+<input id="authorInput" placeholder="不要な場合は空欄" type="text" value="著者名"/>
+</label>
+<label class="field body-field">
+<span>本文</span>
+<textarea id="bodyInput" placeholder="ここに本文を貼り付けてください。" spellcheck="false"># 第1章　組版アプリv007
 
-      <label class="project-name-wrap">
-        <span>プロジェクト名</span>
-        <input id="projectName" type="text" value="新規組版データ" maxlength="80">
-      </label>
-
-      <div class="toolbar" aria-label="ファイル操作">
-        <button id="newBtn" type="button" class="button secondary">新規</button>
-        <button id="projectsBtn" type="button" class="button secondary">プロジェクト</button>
-        <button id="saveBtn" type="button" class="button secondary">保存</button>
-        <button id="duplicateBtn" type="button" class="button secondary">複製</button>
-        <button id="templatesBtn" type="button" class="button secondary">テンプレート</button>
-        <button id="exportBtn" type="button" class="button secondary">JSON出力</button>
-        <button id="importBtn" type="button" class="button secondary">JSON読込</button>
-        <button id="printBtn" type="button" class="button primary">PDF出力</button>
-        <input id="importFile" type="file" accept="application/json,.json" hidden>
-      </div>
-    </header>
-
-    <main class="workspace">
-      <section class="panel manuscript-panel" aria-labelledby="manuscriptTitle">
-        <div class="panel-header">
-          <div>
-            <p class="eyebrow">MANUSCRIPT</p>
-            <h1 id="manuscriptTitle">原稿入力</h1>
-          </div>
-          <span id="charCount" class="count-badge">0文字</span>
-        </div>
-
-        <div class="panel-scroll">
-          <label class="field">
-            <span>タイトル</span>
-            <input id="titleInput" type="text" value="サンプルタイトル" placeholder="書名・記事タイトル">
-          </label>
-
-          <label class="field">
-            <span>サブタイトル</span>
-            <input id="subtitleInput" type="text" value="見出し・字下げ・空行保持の確認用原稿" placeholder="不要な場合は空欄">
-          </label>
-
-          <label class="field">
-            <span>著者名</span>
-            <input id="authorInput" type="text" value="著者名" placeholder="不要な場合は空欄">
-          </label>
-
-          <label class="field body-field">
-            <span>本文</span>
-            <textarea id="bodyInput" spellcheck="false" placeholder="ここに本文を貼り付けてください。"># 第1章　組版アプリv006
-
-これは、組版アプリv006の動作確認用原稿です。
+これは、組版アプリv007の動作確認用原稿です。
 
 右側の設定を変更すると、用紙サイズ、余白、フォント、文字サイズ、文字間、行間が中央のプレビューへ自動反映されます。
 
@@ -80,413 +74,393 @@
 強制改ページや「次の段落と同じページに置く」設定にも対応しています。個別設定を解除すると、本文全体の組版設定へ戻ります。
 
 JSON出力は、バックアップや別端末への移動に使用してください。PDFとして保存する際は、右上の「PDF出力」を押し、ブラウザの印刷画面で余白なし、倍率100%を推奨します。</textarea>
-          </label>
-          <p class="body-input-note">空行は入力した行数のまま反映されます。行頭の「# 」「## 」「### 」は大・中・小見出しとして認識します。</p>
-        </div>
-      </section>
+</label>
+<p class="body-input-note">空行は入力した行数のまま反映されます。行頭の「# 」「## 」「### 」は大・中・小見出しとして認識します。</p>
+</div>
+</section>
+<section aria-labelledby="previewTitle" class="preview-panel">
+<div class="preview-toolbar">
+<div>
+<p class="eyebrow">PREVIEW</p>
+<h2 id="previewTitle">ページプレビュー</h2>
+</div>
+<div class="preview-toolbar-right">
+<p class="preview-hint">本文段落をクリックして個別調整</p>
+<div class="preview-controls">
+<label>
+<span>表示</span>
+<select id="viewMode">
+<option value="single">1ページ</option>
+<option value="spread">見開き</option>
+</select>
+</label>
+<label>
+<span>倍率</span>
+<select id="zoomSelect">
+<option value="0.55">55%</option>
+<option selected="" value="0.7">70%</option>
+<option value="0.85">85%</option>
+<option value="1">100%</option>
+</select>
+</label>
+<button aria-pressed="true" class="button ghost" id="toggleGuidesBtn" type="button">余白ガイド</button>
+</div>
+</div>
+</div>
+<div class="preview-viewport" id="previewViewport">
+<div aria-live="polite" class="pages single" id="pages"></div>
+</div>
+<footer class="preview-footer">
+<span id="pageCount">1ページ</span>
+<span id="currentProjectStatus">新規プロジェクト</span>
+<span id="saveStatus">未保存</span>
+</footer>
+</section>
+<aside aria-labelledby="settingsTitle" class="panel settings-panel">
+<div class="panel-header">
+<div>
+<p class="eyebrow">SETTINGS</p>
+<h2 id="settingsTitle">組版設定</h2>
+</div>
 
-      <section class="preview-panel" aria-labelledby="previewTitle">
-        <div class="preview-toolbar">
-          <div>
-            <p class="eyebrow">PREVIEW</p>
-            <h2 id="previewTitle">ページプレビュー</h2>
-          </div>
+<div class="settings-header-actions"><button class="text-button compact" id="settingsExpandAllBtn" type="button">全て開く</button><button class="text-button compact" id="settingsCollapseAllBtn" type="button">全て閉じる</button><button class="text-button" id="resetSettingsBtn" type="button">初期値に戻す</button></div></div>
+<div class="panel-scroll settings-scroll">
+<details class="settings-accordion paragraph-settings empty" id="paragraphSettingsFieldset" open=""><summary><span class="settings-summary-title">段落の個別調整</span><span class="settings-summary-hint">開閉</span></summary><div class="settings-accordion-body">
 
-          <div class="preview-toolbar-right">
-            <p class="preview-hint">本文段落をクリックして個別調整</p>
-            <div class="preview-controls">
-            <label>
-              <span>表示</span>
-              <select id="viewMode">
-                <option value="single">1ページ</option>
-                <option value="spread">見開き</option>
-              </select>
-            </label>
-            <label>
-              <span>倍率</span>
-              <select id="zoomSelect">
-                <option value="0.55">55%</option>
-                <option value="0.7" selected>70%</option>
-                <option value="0.85">85%</option>
-                <option value="1">100%</option>
-              </select>
-            </label>
-            <button id="toggleGuidesBtn" type="button" class="button ghost" aria-pressed="true">余白ガイド</button>
-            </div>
-          </div>
-        </div>
+<div class="paragraph-empty-state" id="paragraphEmptyState">
+<strong>段落が選択されていません</strong>
+<p>中央プレビュー内の本文をクリックすると、その段落だけを調整できます。</p>
+</div>
+<div hidden="" id="paragraphControls">
+<div class="paragraph-selection-header">
+<div class="paragraph-selection-copy">
+<strong id="selectedParagraphLabel">第1段落</strong>
+<p id="selectedParagraphExcerpt"></p>
+</div>
+<div aria-label="段落移動" class="paragraph-nav">
+<button aria-label="前の段落" class="icon-button compact" id="previousParagraphBtn" type="button">‹</button>
+<button aria-label="次の段落" class="icon-button compact" id="nextParagraphBtn" type="button">›</button>
+</div>
+</div>
+<p class="helper-text paragraph-helper">数値を空欄にすると、本文全体の設定を使用します。</p>
+<div class="field-grid two">
+<label class="field compact">
+<span>文字サイズ（pt）</span>
+<input id="paragraphFontSize" max="40" min="5" placeholder="全体設定" step="0.1" type="number"/>
+</label>
+<label class="field compact">
+<span>行間（pt）</span>
+<input id="paragraphLineHeight" max="60" min="6" placeholder="全体設定" step="0.1" type="number"/>
+</label>
+<label class="field compact">
+<span>文字間（em）</span>
+<input id="paragraphLetterSpacing" max="1" min="-0.2" placeholder="全体設定" step="0.01" type="number"/>
+</label>
+<label class="field compact">
+<span>段落前（mm）</span>
+<input id="paragraphSpaceBefore" max="80" min="0" placeholder="0" step="0.5" type="number"/>
+</label>
+<label class="field compact">
+<span>段落後（mm）</span>
+<input id="paragraphSpaceAfter" max="80" min="0" placeholder="0" step="0.5" type="number"/>
+</label>
+</div>
+<label class="field">
+<span>文字揃え</span>
+<select id="paragraphTextAlign">
+<option value="inherit">本文全体の設定</option>
+<option value="justify">両端揃え</option>
+<option value="left">左揃え</option>
+<option value="center">中央揃え</option>
+<option value="right">右揃え</option>
+</select>
+</label>
+<label class="field">
+<span>段落先頭の字下げ</span>
+<select id="paragraphTextIndent">
+<option value="inherit">本文全体の設定</option>
+<option value="1">1文字下げる</option>
+<option value="0">字下げしない</option>
+</select>
+</label>
+<label class="check-row">
+<input id="paragraphPageBreakBefore" type="checkbox"/>
+<span>この段落の前で強制改ページ</span>
+</label>
+<label class="check-row">
+<input id="paragraphKeepWithNext" type="checkbox"/>
+<span>次の段落と同じページに置く</span>
+</label>
+<button class="button paragraph-reset" id="resetParagraphBtn" type="button">個別設定を解除</button>
+</div>
+</div></details>
+<details class="settings-accordion"><summary><span class="settings-summary-title">用紙</span><span class="settings-summary-hint">開閉</span></summary><div class="settings-accordion-body">
 
-        <div id="previewViewport" class="preview-viewport">
-          <div id="pages" class="pages single" aria-live="polite"></div>
-        </div>
+<label class="field">
+<span>プリセット</span>
+<select id="paperPreset">
+<option value="A4">A4（210 × 297 mm）</option>
+<option selected="" value="A5">A5（148 × 210 mm）</option>
+<option value="B6">B6（128 × 182 mm）</option>
+<option value="custom">自由入力</option>
+</select>
+</label>
+<div class="field-grid two">
+<label class="field compact">
+<span>幅（mm）</span>
+<input id="pageWidth" max="500" min="80" step="0.1" type="number" value="148"/>
+</label>
+<label class="field compact">
+<span>高さ（mm）</span>
+<input id="pageHeight" max="500" min="80" step="0.1" type="number" value="210"/>
+</label>
+</div>
+</div></details>
+<details class="settings-accordion"><summary><span class="settings-summary-title">余白</span><span class="settings-summary-hint">開閉</span></summary><div class="settings-accordion-body">
 
-        <footer class="preview-footer">
-          <span id="pageCount">1ページ</span>
-          <span id="currentProjectStatus">新規プロジェクト</span>
-          <span id="saveStatus">未保存</span>
-        </footer>
-      </section>
+<div class="field-grid two">
+<label class="field compact">
+<span>上（mm）</span>
+<input id="marginTop" max="100" min="0" step="0.5" type="number" value="15"/>
+</label>
+<label class="field compact">
+<span>下（mm）</span>
+<input id="marginBottom" max="100" min="0" step="0.5" type="number" value="18"/>
+</label>
+<label class="field compact">
+<span>左（mm）</span>
+<input id="marginLeft" max="100" min="0" step="0.5" type="number" value="18"/>
+</label>
+<label class="field compact">
+<span>右（mm）</span>
+<input id="marginRight" max="100" min="0" step="0.5" type="number" value="15"/>
+</label>
+</div>
+</div></details>
+<details class="settings-accordion" open=""><summary><span class="settings-summary-title">本文</span><span class="settings-summary-hint">開閉</span></summary><div class="settings-accordion-body">
 
-      <aside class="panel settings-panel" aria-labelledby="settingsTitle">
-        <div class="panel-header">
-          <div>
-            <p class="eyebrow">SETTINGS</p>
-            <h2 id="settingsTitle">組版設定</h2>
-          </div>
-          <button id="resetSettingsBtn" type="button" class="text-button">初期値に戻す</button>
-        </div>
+<label class="field">
+<span>フォント</span>
+<select id="fontFamily">
+<option value="'Noto Serif JP', 'Yu Mincho', 'Hiragino Mincho ProN', serif">明朝体</option>
+<option value="'Noto Sans JP', 'Yu Gothic', 'Hiragino Kaku Gothic ProN', sans-serif">ゴシック体</option>
+<option value="'Yu Mincho', serif">游明朝</option>
+<option value="'Yu Gothic', sans-serif">游ゴシック</option>
+<option value="serif">端末の標準明朝</option>
+<option value="sans-serif">端末の標準ゴシック</option>
+</select>
+</label>
+<label class="check-row">
+<input checked="" id="useTextIndent" type="checkbox"/>
+<span>段落先頭を字下げする</span>
+</label>
+<p class="helper-text">オフにすると本文全体を字下げなしにします。段落ごとに1文字／なしを上書きできます。</p>
+<div class="field-grid two">
+<label class="field compact">
+<span>文字サイズ（pt）</span>
+<input id="fontSize" max="40" min="5" step="0.1" type="number" value="9"/>
+</label>
+<label class="field compact">
+<span>行間（pt）</span>
+<input id="lineHeight" max="60" min="6" step="0.1" type="number" value="15"/>
+</label>
+<label class="field compact">
+<span>文字間（em）</span>
+<input id="letterSpacing" max="1" min="-0.2" step="0.01" type="number" value="0.02"/>
+</label>
+<label class="field compact">
+<span>字下げ量（文字）</span>
+<input id="textIndent" max="10" min="0" step="0.5" type="number" value="1"/>
+</label>
+</div>
+<label class="field">
+<span>文字揃え</span>
+<select id="textAlign">
+<option selected="" value="justify">両端揃え</option>
+<option value="left">左揃え</option>
+<option value="center">中央揃え</option>
+<option value="right">右揃え</option>
+</select>
+</label>
+<label class="check-row">
+<input checked="" id="preserveBlankLines" type="checkbox"/>
+<span>本文に入力した空行を保持する</span>
+</label>
+<label class="field compact">
+<span>空行1行の高さ（本文行の倍率）</span>
+<input id="blankLineScale" max="4" min="0" step="0.1" type="number" value="1"/>
+</label>
+<p class="helper-text">通常は1.0です。空行を少し詰める場合は0.8などに変更できます。</p>
+</div></details>
+<details class="settings-accordion"><summary><span class="settings-summary-title">本文内見出し</span><span class="settings-summary-hint">開閉</span></summary><div class="settings-accordion-body">
 
-        <div class="panel-scroll settings-scroll">
-          <fieldset id="paragraphSettingsFieldset" class="paragraph-settings empty">
-            <legend>段落の個別調整</legend>
+<p class="helper-text heading-syntax-note"><code># 大見出し</code>　<code>## 中見出し</code>　<code>### 小見出し</code><br/>入力した空行は、見出し前後の余白に追加されます。</p>
+<details class="heading-setting-accordion" open=""><summary>大見出し（#）</summary><div class="heading-setting-body">
 
-            <div id="paragraphEmptyState" class="paragraph-empty-state">
-              <strong>段落が選択されていません</strong>
-              <p>中央プレビュー内の本文をクリックすると、その段落だけを調整できます。</p>
-            </div>
+<label class="field">
+<span>フォント</span>
+<select id="heading1FontFamily">
+<option value="'Noto Serif JP', 'Yu Mincho', 'Hiragino Mincho ProN', serif">明朝体</option>
+<option value="'Noto Sans JP', 'Yu Gothic', 'Hiragino Kaku Gothic ProN', sans-serif">ゴシック体</option>
+<option value="'Yu Mincho', serif">游明朝</option>
+<option value="'Yu Gothic', sans-serif">游ゴシック</option>
+<option value="serif">端末の標準明朝</option>
+<option value="sans-serif">端末の標準ゴシック</option>
+</select>
+</label>
+<div class="field-grid two">
+<label class="field compact"><span>サイズ（pt）</span><input id="heading1Size" max="72" min="7" step="0.5" type="number" value="16"/></label>
+<label class="field compact"><span>前の余白（mm）</span><input id="heading1SpaceBefore" max="80" min="0" step="0.5" type="number" value="10"/></label>
+<label class="field compact"><span>後の余白（mm）</span><input id="heading1SpaceAfter" max="80" min="0" step="0.5" type="number" value="5"/></label>
+</div>
+<label class="field"><span>揃え</span><select id="heading1Align"><option selected="" value="left">左揃え</option><option value="center">中央揃え</option><option value="right">右揃え</option></select></label>
+<label class="check-row"><input checked="" id="heading1PageBreakBefore" type="checkbox"/><span>大見出しの前で改ページ</span></label>
+<label class="check-row"><input checked="" id="heading1KeepWithNext" type="checkbox"/><span>直後の本文と同じページに置く</span></label>
+</div></details>
+<details class="heading-setting-accordion"><summary>中見出し（##）</summary><div class="heading-setting-body">
 
-            <div id="paragraphControls" hidden>
-              <div class="paragraph-selection-header">
-                <div class="paragraph-selection-copy">
-                  <strong id="selectedParagraphLabel">第1段落</strong>
-                  <p id="selectedParagraphExcerpt"></p>
-                </div>
-                <div class="paragraph-nav" aria-label="段落移動">
-                  <button id="previousParagraphBtn" type="button" class="icon-button compact" aria-label="前の段落">‹</button>
-                  <button id="nextParagraphBtn" type="button" class="icon-button compact" aria-label="次の段落">›</button>
-                </div>
-              </div>
+<label class="field">
+<span>フォント</span>
+<select id="heading2FontFamily">
+<option value="'Noto Serif JP', 'Yu Mincho', 'Hiragino Mincho ProN', serif">明朝体</option>
+<option selected="" value="'Noto Sans JP', 'Yu Gothic', 'Hiragino Kaku Gothic ProN', sans-serif">ゴシック体</option>
+<option value="'Yu Mincho', serif">游明朝</option>
+<option value="'Yu Gothic', sans-serif">游ゴシック</option>
+<option value="serif">端末の標準明朝</option>
+<option value="sans-serif">端末の標準ゴシック</option>
+</select>
+</label>
+<div class="field-grid two">
+<label class="field compact"><span>サイズ（pt）</span><input id="heading2Size" max="72" min="7" step="0.5" type="number" value="13"/></label>
+<label class="field compact"><span>前の余白（mm）</span><input id="heading2SpaceBefore" max="80" min="0" step="0.5" type="number" value="7"/></label>
+<label class="field compact"><span>後の余白（mm）</span><input id="heading2SpaceAfter" max="80" min="0" step="0.5" type="number" value="3"/></label>
+</div>
+<label class="field"><span>揃え</span><select id="heading2Align"><option selected="" value="left">左揃え</option><option value="center">中央揃え</option><option value="right">右揃え</option></select></label>
+<label class="check-row"><input id="heading2PageBreakBefore" type="checkbox"/><span>中見出しの前で改ページ</span></label>
+<label class="check-row"><input checked="" id="heading2KeepWithNext" type="checkbox"/><span>直後の本文と同じページに置く</span></label>
+</div></details>
+<details class="heading-setting-accordion"><summary>小見出し（###）</summary><div class="heading-setting-body">
 
-              <p class="helper-text paragraph-helper">数値を空欄にすると、本文全体の設定を使用します。</p>
+<label class="field">
+<span>フォント</span>
+<select id="heading3FontFamily">
+<option value="'Noto Serif JP', 'Yu Mincho', 'Hiragino Mincho ProN', serif">明朝体</option>
+<option selected="" value="'Noto Sans JP', 'Yu Gothic', 'Hiragino Kaku Gothic ProN', sans-serif">ゴシック体</option>
+<option value="'Yu Mincho', serif">游明朝</option>
+<option value="'Yu Gothic', sans-serif">游ゴシック</option>
+<option value="serif">端末の標準明朝</option>
+<option value="sans-serif">端末の標準ゴシック</option>
+</select>
+</label>
+<div class="field-grid two">
+<label class="field compact"><span>サイズ（pt）</span><input id="heading3Size" max="72" min="7" step="0.5" type="number" value="11"/></label>
+<label class="field compact"><span>前の余白（mm）</span><input id="heading3SpaceBefore" max="80" min="0" step="0.5" type="number" value="5"/></label>
+<label class="field compact"><span>後の余白（mm）</span><input id="heading3SpaceAfter" max="80" min="0" step="0.5" type="number" value="2"/></label>
+</div>
+<label class="field"><span>揃え</span><select id="heading3Align"><option selected="" value="left">左揃え</option><option value="center">中央揃え</option><option value="right">右揃え</option></select></label>
+<label class="check-row"><input id="heading3PageBreakBefore" type="checkbox"/><span>小見出しの前で改ページ</span></label>
+<label class="check-row"><input checked="" id="heading3KeepWithNext" type="checkbox"/><span>直後の本文と同じページに置く</span></label>
+</div></details>
+</div></details>
+<details class="settings-accordion"><summary><span class="settings-summary-title">タイトル</span><span class="settings-summary-hint">開閉</span></summary><div class="settings-accordion-body">
 
-              <div class="field-grid two">
-                <label class="field compact">
-                  <span>文字サイズ（pt）</span>
-                  <input id="paragraphFontSize" type="number" min="5" max="40" step="0.1" placeholder="全体設定">
-                </label>
-                <label class="field compact">
-                  <span>行間（pt）</span>
-                  <input id="paragraphLineHeight" type="number" min="6" max="60" step="0.1" placeholder="全体設定">
-                </label>
-                <label class="field compact">
-                  <span>文字間（em）</span>
-                  <input id="paragraphLetterSpacing" type="number" min="-0.2" max="1" step="0.01" placeholder="全体設定">
-                </label>
-                <label class="field compact">
-                  <span>段落前（mm）</span>
-                  <input id="paragraphSpaceBefore" type="number" min="0" max="80" step="0.5" placeholder="0">
-                </label>
-                <label class="field compact">
-                  <span>段落後（mm）</span>
-                  <input id="paragraphSpaceAfter" type="number" min="0" max="80" step="0.5" placeholder="0">
-                </label>
-              </div>
-
-              <label class="field">
-                <span>文字揃え</span>
-                <select id="paragraphTextAlign">
-                  <option value="inherit">本文全体の設定</option>
-                  <option value="justify">両端揃え</option>
-                  <option value="left">左揃え</option>
-                  <option value="center">中央揃え</option>
-                  <option value="right">右揃え</option>
-                </select>
-              </label>
-
-              <label class="field">
-                <span>段落先頭の字下げ</span>
-                <select id="paragraphTextIndent">
-                  <option value="inherit">本文全体の設定</option>
-                  <option value="1">1文字下げる</option>
-                  <option value="0">字下げしない</option>
-                </select>
-              </label>
-
-              <label class="check-row">
-                <input id="paragraphPageBreakBefore" type="checkbox">
-                <span>この段落の前で強制改ページ</span>
-              </label>
-              <label class="check-row">
-                <input id="paragraphKeepWithNext" type="checkbox">
-                <span>次の段落と同じページに置く</span>
-              </label>
-
-              <button id="resetParagraphBtn" type="button" class="button paragraph-reset">個別設定を解除</button>
-            </div>
-          </fieldset>
-
-          <fieldset>
-            <legend>用紙</legend>
-
-            <label class="field">
-              <span>プリセット</span>
-              <select id="paperPreset">
-                <option value="A4">A4（210 × 297 mm）</option>
-                <option value="A5" selected>A5（148 × 210 mm）</option>
-                <option value="B6">B6（128 × 182 mm）</option>
-                <option value="custom">自由入力</option>
-              </select>
-            </label>
-
-            <div class="field-grid two">
-              <label class="field compact">
-                <span>幅（mm）</span>
-                <input id="pageWidth" type="number" min="80" max="500" step="0.1" value="148">
-              </label>
-              <label class="field compact">
-                <span>高さ（mm）</span>
-                <input id="pageHeight" type="number" min="80" max="500" step="0.1" value="210">
-              </label>
-            </div>
-          </fieldset>
-
-          <fieldset>
-            <legend>余白</legend>
-            <div class="field-grid two">
-              <label class="field compact">
-                <span>上（mm）</span>
-                <input id="marginTop" type="number" min="0" max="100" step="0.5" value="15">
-              </label>
-              <label class="field compact">
-                <span>下（mm）</span>
-                <input id="marginBottom" type="number" min="0" max="100" step="0.5" value="18">
-              </label>
-              <label class="field compact">
-                <span>左（mm）</span>
-                <input id="marginLeft" type="number" min="0" max="100" step="0.5" value="18">
-              </label>
-              <label class="field compact">
-                <span>右（mm）</span>
-                <input id="marginRight" type="number" min="0" max="100" step="0.5" value="15">
-              </label>
-            </div>
-          </fieldset>
-
-          <fieldset>
-            <legend>本文</legend>
-
-            <label class="field">
-              <span>フォント</span>
-              <select id="fontFamily">
-                <option value="'Noto Serif JP', 'Yu Mincho', 'Hiragino Mincho ProN', serif">明朝体</option>
-                <option value="'Noto Sans JP', 'Yu Gothic', 'Hiragino Kaku Gothic ProN', sans-serif">ゴシック体</option>
-                <option value="'Yu Mincho', serif">游明朝</option>
-                <option value="'Yu Gothic', sans-serif">游ゴシック</option>
-                <option value="serif">端末の標準明朝</option>
-                <option value="sans-serif">端末の標準ゴシック</option>
-              </select>
-            </label>
-
-            <label class="check-row">
-              <input id="useTextIndent" type="checkbox" checked>
-              <span>段落先頭を字下げする</span>
-            </label>
-            <p class="helper-text">オフにすると本文全体を字下げなしにします。段落ごとに1文字／なしを上書きできます。</p>
-
-            <div class="field-grid two">
-              <label class="field compact">
-                <span>文字サイズ（pt）</span>
-                <input id="fontSize" type="number" min="5" max="40" step="0.1" value="9">
-              </label>
-              <label class="field compact">
-                <span>行間（pt）</span>
-                <input id="lineHeight" type="number" min="6" max="60" step="0.1" value="15">
-              </label>
-              <label class="field compact">
-                <span>文字間（em）</span>
-                <input id="letterSpacing" type="number" min="-0.2" max="1" step="0.01" value="0.02">
-              </label>
-              <label class="field compact">
-                <span>字下げ量（文字）</span>
-                <input id="textIndent" type="number" min="0" max="10" step="0.5" value="1">
-              </label>
-            </div>
-
-            <label class="field">
-              <span>文字揃え</span>
-              <select id="textAlign">
-                <option value="justify" selected>両端揃え</option>
-                <option value="left">左揃え</option>
-                <option value="center">中央揃え</option>
-                <option value="right">右揃え</option>
-              </select>
-            </label>
-
-            <label class="check-row">
-              <input id="preserveBlankLines" type="checkbox" checked>
-              <span>本文に入力した空行を保持する</span>
-            </label>
-
-            <label class="field compact">
-              <span>空行1行の高さ（本文行の倍率）</span>
-              <input id="blankLineScale" type="number" min="0" max="4" step="0.1" value="1">
-            </label>
-            <p class="helper-text">通常は1.0です。空行を少し詰める場合は0.8などに変更できます。</p>
-          </fieldset>
-
-
-          <fieldset>
-            <legend>本文内見出し</legend>
-            <p class="helper-text heading-syntax-note"><code># 大見出し</code>　<code>## 中見出し</code>　<code>### 小見出し</code><br>入力した空行は、見出し前後の余白に追加されます。</p>
-
-            <section class="heading-setting-card">
-              <h3>大見出し（#）</h3>
-              <label class="field">
-                <span>フォント</span>
-                <select id="heading1FontFamily">
-                  <option value="'Noto Serif JP', 'Yu Mincho', 'Hiragino Mincho ProN', serif">明朝体</option>
-                  <option value="'Noto Sans JP', 'Yu Gothic', 'Hiragino Kaku Gothic ProN', sans-serif">ゴシック体</option>
-                  <option value="'Yu Mincho', serif">游明朝</option>
-                  <option value="'Yu Gothic', sans-serif">游ゴシック</option>
-                  <option value="serif">端末の標準明朝</option>
-                  <option value="sans-serif">端末の標準ゴシック</option>
-                </select>
-              </label>
-              <div class="field-grid two">
-                <label class="field compact"><span>サイズ（pt）</span><input id="heading1Size" type="number" min="7" max="72" step="0.5" value="16"></label>
-                <label class="field compact"><span>前の余白（mm）</span><input id="heading1SpaceBefore" type="number" min="0" max="80" step="0.5" value="10"></label>
-                <label class="field compact"><span>後の余白（mm）</span><input id="heading1SpaceAfter" type="number" min="0" max="80" step="0.5" value="5"></label>
-              </div>
-              <label class="field"><span>揃え</span><select id="heading1Align"><option value="left" selected>左揃え</option><option value="center">中央揃え</option><option value="right">右揃え</option></select></label>
-              <label class="check-row"><input id="heading1PageBreakBefore" type="checkbox" checked><span>大見出しの前で改ページ</span></label>
-              <label class="check-row"><input id="heading1KeepWithNext" type="checkbox" checked><span>直後の本文と同じページに置く</span></label>
-            </section>
-
-            <section class="heading-setting-card">
-              <h3>中見出し（##）</h3>
-              <label class="field">
-                <span>フォント</span>
-                <select id="heading2FontFamily">
-                  <option value="'Noto Serif JP', 'Yu Mincho', 'Hiragino Mincho ProN', serif">明朝体</option>
-                  <option value="'Noto Sans JP', 'Yu Gothic', 'Hiragino Kaku Gothic ProN', sans-serif" selected>ゴシック体</option>
-                  <option value="'Yu Mincho', serif">游明朝</option>
-                  <option value="'Yu Gothic', sans-serif">游ゴシック</option>
-                  <option value="serif">端末の標準明朝</option>
-                  <option value="sans-serif">端末の標準ゴシック</option>
-                </select>
-              </label>
-              <div class="field-grid two">
-                <label class="field compact"><span>サイズ（pt）</span><input id="heading2Size" type="number" min="7" max="72" step="0.5" value="13"></label>
-                <label class="field compact"><span>前の余白（mm）</span><input id="heading2SpaceBefore" type="number" min="0" max="80" step="0.5" value="7"></label>
-                <label class="field compact"><span>後の余白（mm）</span><input id="heading2SpaceAfter" type="number" min="0" max="80" step="0.5" value="3"></label>
-              </div>
-              <label class="field"><span>揃え</span><select id="heading2Align"><option value="left" selected>左揃え</option><option value="center">中央揃え</option><option value="right">右揃え</option></select></label>
-              <label class="check-row"><input id="heading2PageBreakBefore" type="checkbox"><span>中見出しの前で改ページ</span></label>
-              <label class="check-row"><input id="heading2KeepWithNext" type="checkbox" checked><span>直後の本文と同じページに置く</span></label>
-            </section>
-
-            <section class="heading-setting-card">
-              <h3>小見出し（###）</h3>
-              <label class="field">
-                <span>フォント</span>
-                <select id="heading3FontFamily">
-                  <option value="'Noto Serif JP', 'Yu Mincho', 'Hiragino Mincho ProN', serif">明朝体</option>
-                  <option value="'Noto Sans JP', 'Yu Gothic', 'Hiragino Kaku Gothic ProN', sans-serif" selected>ゴシック体</option>
-                  <option value="'Yu Mincho', serif">游明朝</option>
-                  <option value="'Yu Gothic', sans-serif">游ゴシック</option>
-                  <option value="serif">端末の標準明朝</option>
-                  <option value="sans-serif">端末の標準ゴシック</option>
-                </select>
-              </label>
-              <div class="field-grid two">
-                <label class="field compact"><span>サイズ（pt）</span><input id="heading3Size" type="number" min="7" max="72" step="0.5" value="11"></label>
-                <label class="field compact"><span>前の余白（mm）</span><input id="heading3SpaceBefore" type="number" min="0" max="80" step="0.5" value="5"></label>
-                <label class="field compact"><span>後の余白（mm）</span><input id="heading3SpaceAfter" type="number" min="0" max="80" step="0.5" value="2"></label>
-              </div>
-              <label class="field"><span>揃え</span><select id="heading3Align"><option value="left" selected>左揃え</option><option value="center">中央揃え</option><option value="right">右揃え</option></select></label>
-              <label class="check-row"><input id="heading3PageBreakBefore" type="checkbox"><span>小見出しの前で改ページ</span></label>
-              <label class="check-row"><input id="heading3KeepWithNext" type="checkbox" checked><span>直後の本文と同じページに置く</span></label>
-            </section>
-          </fieldset>
-
-          <fieldset>
-            <legend>タイトル</legend>
-            <label class="check-row">
-              <input id="showDocumentHeading" type="checkbox" checked>
-              <span>タイトル・サブタイトル・著者名を誌面に表示</span>
-            </label>
-            <label class="check-row">
-              <input id="bodyStartOnNewPage" type="checkbox">
-              <span>タイトルの後、本文を次ページから開始</span>
-            </label>
-            <div class="field-grid two">
-              <label class="field compact">
-                <span>サイズ（pt）</span>
-                <input id="titleSize" type="number" min="8" max="72" step="0.5" value="20">
-              </label>
-              <label class="field compact">
-                <span>本文まで（mm）</span>
-                <input id="titleBottom" type="number" min="0" max="80" step="0.5" value="14">
-              </label>
-            </div>
-
-            <label class="field">
-              <span>揃え</span>
-              <select id="titleAlign">
-                <option value="left">左揃え</option>
-                <option value="center" selected>中央揃え</option>
-                <option value="right">右揃え</option>
-              </select>
-            </label>
-          </fieldset>
-
-          <fieldset>
-            <legend>ページ</legend>
-            <label class="check-row">
-              <input id="showPageNumbers" type="checkbox" checked>
-              <span>ページ番号を表示</span>
-            </label>
-            <label class="check-row">
-              <input id="firstPageNumber" type="checkbox">
-              <span>1ページ目にも番号を表示</span>
-            </label>
-          </fieldset>
-        </div>
-      </aside>
-    </main>
-  </div>
-
-  <div id="measureRoot" class="measure-root" aria-hidden="true"></div>
-  <div id="toast" class="toast" role="status" aria-live="polite"></div>
-
-  <div id="projectsModal" class="modal-backdrop" hidden>
-    <section class="modal-card wide" role="dialog" aria-modal="true" aria-labelledby="projectsModalTitle">
-      <header class="modal-header">
-        <div>
-          <p class="eyebrow">LOCAL PROJECTS</p>
-          <h2 id="projectsModalTitle">保存済みプロジェクト</h2>
-        </div>
-        <button type="button" class="icon-button" data-close-modal="projectsModal" aria-label="閉じる">×</button>
-      </header>
-      <div class="modal-toolbar">
-        <p id="projectStorageSummary" class="helper-text">このブラウザ内に保存されます。</p>
-        <button id="createProjectFromModalBtn" type="button" class="button modal-primary">新規プロジェクト</button>
-      </div>
-      <div id="projectList" class="library-list"></div>
-    </section>
-  </div>
-
-  <div id="templatesModal" class="modal-backdrop" hidden>
-    <section class="modal-card wide" role="dialog" aria-modal="true" aria-labelledby="templatesModalTitle">
-      <header class="modal-header">
-        <div>
-          <p class="eyebrow">TYPESETTING TEMPLATES</p>
-          <h2 id="templatesModalTitle">組版テンプレート</h2>
-        </div>
-        <button type="button" class="icon-button" data-close-modal="templatesModal" aria-label="閉じる">×</button>
-      </header>
-      <div class="template-create-row">
-        <label class="field template-name-field">
-          <span>テンプレート名</span>
-          <input id="templateNameInput" type="text" maxlength="80" placeholder="例：A5 文芸書 基本設定">
-        </label>
-        <button id="saveTemplateBtn" type="button" class="button modal-primary">現在の設定を保存</button>
-      </div>
-      <p class="helper-text template-note">テンプレートには用紙、余白、本文、見出し、タイトル、ページ設定だけを保存します。原稿内容は含まれません。</p>
-      <div id="templateList" class="library-list"></div>
-    </section>
-  </div>
-
-  <script src="app.js" defer></script>
+<label class="check-row">
+<input checked="" id="showDocumentHeading" type="checkbox"/>
+<span>タイトル・サブタイトル・著者名を誌面に表示</span>
+</label>
+<label class="check-row">
+<input id="bodyStartOnNewPage" type="checkbox"/>
+<span>タイトルの後、本文を次ページから開始</span>
+</label>
+<div class="field-grid two">
+<label class="field compact">
+<span>サイズ（pt）</span>
+<input id="titleSize" max="72" min="8" step="0.5" type="number" value="20"/>
+</label>
+<label class="field compact">
+<span>本文まで（mm）</span>
+<input id="titleBottom" max="80" min="0" step="0.5" type="number" value="14"/>
+</label>
+</div>
+<label class="field">
+<span>揃え</span>
+<select id="titleAlign">
+<option value="left">左揃え</option>
+<option selected="" value="center">中央揃え</option>
+<option value="right">右揃え</option>
+</select>
+</label>
+</div></details>
+<details class="settings-accordion" open=""><summary><span class="settings-summary-title">ページ</span><span class="settings-summary-hint">開閉</span></summary><div class="settings-accordion-body">
+<div class="setting-subsection">
+<h3>ページ番号</h3>
+<label class="check-row"><input checked="" id="showPageNumbers" type="checkbox"/><span>ページ番号を表示</span></label>
+<div class="field-grid two">
+<label class="field compact"><span>開始番号</span><input id="pageNumberStart" max="9999" min="0" step="1" type="number" value="1"/></label>
+<label class="field compact"><span>表示位置</span><select id="pageNumberPosition"><option selected="" value="bottom-center">下・中央</option><option value="bottom-outer">下・外側</option><option value="top-center">上・中央</option><option value="top-outer">上・外側</option></select></label>
+</div>
+<label class="check-row"><input id="firstPageNumber" type="checkbox"/><span>1ページ目にも番号を表示</span></label>
+</div>
+<div class="setting-subsection">
+<h3>ヘッダー</h3>
+<label class="check-row"><input id="showHeader" type="checkbox"/><span>ヘッダーを表示</span></label>
+<label class="field"><span>表示内容</span><select id="headerContent"><option value="title">タイトル</option><option selected="" value="chapter">現在の大見出し</option><option value="author">著者名</option><option value="custom">自由入力</option></select></label>
+<label class="field"><span>自由入力</span><input id="headerCustomText" maxlength="120" placeholder="ヘッダーに表示する文字" type="text"/></label>
+<label class="field"><span>位置</span><select id="headerPosition"><option selected="" value="outer">外側</option><option value="center">中央</option><option value="inner">内側</option></select></label>
+<label class="check-row"><input id="headerFirstPage" type="checkbox"/><span>1ページ目にも表示</span></label>
+</div>
+<div class="setting-subsection">
+<h3>フッター文字</h3>
+<label class="check-row"><input id="showFooterText" type="checkbox"/><span>フッター文字を表示</span></label>
+<label class="field"><span>表示内容</span><select id="footerContent"><option value="title">タイトル</option><option value="chapter">現在の大見出し</option><option value="author">著者名</option><option selected="" value="custom">自由入力</option></select></label>
+<label class="field"><span>自由入力</span><input id="footerCustomText" maxlength="120" placeholder="フッターに表示する文字" type="text"/></label>
+<label class="field"><span>位置</span><select id="footerPosition"><option value="outer">外側</option><option selected="" value="center">中央</option><option value="inner">内側</option></select></label>
+<label class="check-row"><input id="footerFirstPage" type="checkbox"/><span>1ページ目にも表示</span></label>
+</div>
+<p class="helper-text running-note">「外側／内側」は奇数・偶数ページで左右が自動的に切り替わります。現在の大見出しは、本文内の <code># 大見出し</code> を使用します。</p>
+</div></details>
+</div>
+</aside>
+</main>
+</div>
+<div aria-hidden="true" class="measure-root" id="measureRoot"></div>
+<div aria-live="polite" class="toast" id="toast" role="status"></div>
+<div class="modal-backdrop" hidden="" id="projectsModal">
+<section aria-labelledby="projectsModalTitle" aria-modal="true" class="modal-card wide" role="dialog">
+<header class="modal-header">
+<div>
+<p class="eyebrow">LOCAL PROJECTS</p>
+<h2 id="projectsModalTitle">保存済みプロジェクト</h2>
+</div>
+<button aria-label="閉じる" class="icon-button" data-close-modal="projectsModal" type="button">×</button>
+</header>
+<div class="modal-toolbar">
+<p class="helper-text" id="projectStorageSummary">このブラウザ内に保存されます。</p>
+<button class="button modal-primary" id="createProjectFromModalBtn" type="button">新規プロジェクト</button>
+</div>
+<div class="library-list" id="projectList"></div>
+</section>
+</div>
+<div class="modal-backdrop" hidden="" id="templatesModal">
+<section aria-labelledby="templatesModalTitle" aria-modal="true" class="modal-card wide" role="dialog">
+<header class="modal-header">
+<div>
+<p class="eyebrow">TYPESETTING TEMPLATES</p>
+<h2 id="templatesModalTitle">組版テンプレート</h2>
+</div>
+<button aria-label="閉じる" class="icon-button" data-close-modal="templatesModal" type="button">×</button>
+</header>
+<div class="template-create-row">
+<label class="field template-name-field">
+<span>テンプレート名</span>
+<input id="templateNameInput" maxlength="80" placeholder="例：A5 文芸書 基本設定" type="text"/>
+</label>
+<button class="button modal-primary" id="saveTemplateBtn" type="button">現在の設定を保存</button>
+</div>
+<p class="helper-text template-note">テンプレートには用紙、余白、本文、見出し、タイトル、ページ設定だけを保存します。原稿内容は含まれません。</p>
+<div class="library-list" id="templateList"></div>
+</section>
+</div>
+<script defer="" src="app.js"></script>
 </body>
 </html>
