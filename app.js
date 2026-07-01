@@ -1,24 +1,25 @@
 'use strict';
 
-const APP_VERSION = 'v017';
-const SCHEMA_VERSION = 17;
+const APP_VERSION = 'v018';
+const SCHEMA_VERSION = 18;
 const AUTOSAVE_DELAY = 700;
 const MAX_MEDIA_ASSETS = 20;
 const MAX_MEDIA_DATA_CHARS = 3_200_000;
 const MAX_MEDIA_SOURCE_BYTES = 12 * 1024 * 1024;
 const MEDIA_MARKER_PATTERN = /^\s*\[\[figure:([a-zA-Z0-9_-]+)\]\]\s*$/;
 
-const PROJECT_INDEX_KEY = 'typesetting-app-v017-project-index';
-const PROJECT_PREFIX = 'typesetting-app-v017-project:';
-const CURRENT_PROJECT_KEY = 'typesetting-app-v017-current-project';
-const TEMPLATE_STORAGE_KEY = 'typesetting-app-v017-templates';
+const PROJECT_INDEX_KEY = 'typesetting-app-v018-project-index';
+const PROJECT_PREFIX = 'typesetting-app-v018-project:';
+const CURRENT_PROJECT_KEY = 'typesetting-app-v018-current-project';
+const TEMPLATE_STORAGE_KEY = 'typesetting-app-v018-templates';
 
-const LEGACY_V16_PROJECT_INDEX_KEY = 'typesetting-app-v016-project-index';
-const LEGACY_V16_PROJECT_PREFIX = 'typesetting-app-v016-project:';
-const LEGACY_V16_CURRENT_PROJECT_KEY = 'typesetting-app-v016-current-project';
-const LEGACY_V16_TEMPLATE_STORAGE_KEY = 'typesetting-app-v016-templates';
+const LEGACY_V17_PROJECT_INDEX_KEY = 'typesetting-app-v017-project-index';
+const LEGACY_V17_PROJECT_PREFIX = 'typesetting-app-v017-project:';
+const LEGACY_V17_CURRENT_PROJECT_KEY = 'typesetting-app-v017-current-project';
+const LEGACY_V17_TEMPLATE_STORAGE_KEY = 'typesetting-app-v017-templates';
 const LEGACY_V1_STORAGE_KEY = 'typesetting-app-v001';
-const MIGRATION_MARKER_KEY = 'typesetting-app-v017-migration-complete';
+const MIGRATION_MARKER_KEY = 'typesetting-app-v018-migration-complete';
+const WELCOME_SEEN_KEY = 'typesetting-app-v018-welcome-seen';
 
 const DEFAULT_SETTINGS = Object.freeze({
   paperPreset: 'A5',
@@ -105,9 +106,9 @@ const SAMPLE_MANUSCRIPT = Object.freeze({
   title: 'サンプルタイトル',
   subtitle: '出力前チェック対応の確認用原稿',
   author: '著者名',
-  body: `# 第1章　組版アプリv017
+  body: `# 第1章　組版アプリv018
 
-これは、組版アプリv017の動作確認用原稿です。用紙設定から「縦書き・右綴じ」へ切り替えると、同じ原稿を縦書きで確認できます。
+これは、組版アプリv018の動作確認用原稿です。用紙設定から「縦書き・右綴じ」へ切り替えると、同じ原稿を縦書きで確認できます。
 
 文字を選択して、**太字**、《《傍点》》、｜組版《くみはん》、__下線__を設定できます。記号はプレビューやPDFには表示されません。
 
@@ -145,7 +146,7 @@ const DEFAULT_BOOK_MATTER = Object.freeze({
 });
 
 const DEFAULT_STATE = Object.freeze({
-  projectName: '組版アプリ v017 サンプル',
+  projectName: '組版アプリ v018 サンプル',
   manuscript: { ...SAMPLE_MANUSCRIPT, paragraphs: [], chapters: [], media: [], matter: deepClone(DEFAULT_BOOK_MATTER) },
   paragraphOverrides: {},
   settings: DEFAULT_SETTINGS,
@@ -238,7 +239,7 @@ let preflightIssues = [];
 let preflightFilter = 'all';
 let preflightTimer = null;
 const MAX_MANUSCRIPT_ISSUES = 300;
-const MANUSCRIPT_MODE_KEY = 'typesetting-app-v017-manuscript-mode';
+const MANUSCRIPT_MODE_KEY = 'typesetting-app-v018-manuscript-mode';
 
 window.addEventListener('DOMContentLoaded', init);
 
@@ -264,6 +265,8 @@ function init() {
   schedulePreflightCheck(350);
   scheduleRender();
   refreshCurrentProjectStatus();
+  updateWorkflowGuide();
+  setTimeout(maybeOpenWelcome, 260);
 }
 
 function cacheElements() {
@@ -325,7 +328,14 @@ function cacheElements() {
     'preflightStatusIcon', 'preflightStatusTitle', 'preflightStatusText',
     'preflightErrors', 'preflightWarnings', 'preflightInfo', 'preflightPages',
     'rerunPreflightBtn', 'preflightList', 'preflightEmpty', 'preflightFooterNote',
-    'preflightPdfBtn'
+    'preflightPdfBtn',
+    'topSaveStatus', 'topSaveStatusText', 'toolbarMore',
+    'workflowManuscript', 'workflowLayout', 'workflowStructure', 'workflowOutput',
+    'workflowManuscriptState', 'workflowLayoutState', 'workflowStructureState', 'workflowOutputState',
+    'guideBtn', 'welcomeModal', 'welcomeNewBtn', 'welcomeImportBtn', 'welcomeSampleBtn',
+    'welcomeGuideBtn', 'welcomeContinueBtn', 'projectSetupModal', 'projectSetupTypes',
+    'setupProjectName', 'setupBookTitle', 'setupAuthor', 'createFromSetupBtn', 'guideModal',
+    'manuscriptPanel', 'settingsPanel', 'previewPanel'
   ];
 
   ids.forEach((id) => {
@@ -479,7 +489,7 @@ function bindEvents() {
   els.previousParagraphBtn.addEventListener('click', () => navigateSelectedParagraph(-1));
   els.nextParagraphBtn.addEventListener('click', () => navigateSelectedParagraph(1));
 
-  els.newBtn.addEventListener('click', () => createNewProject(true));
+  els.newBtn.addEventListener('click', openProjectSetupModal);
   els.projectsBtn.addEventListener('click', openProjectsModal);
   els.saveBtn.addEventListener('click', () => saveCurrentProject(true));
   els.duplicateBtn.addEventListener('click', () => duplicateProjectById(currentProjectId, true));
@@ -503,10 +513,21 @@ function bindEvents() {
     button.addEventListener('click', () => setManuscriptCheckFilter(button.dataset.checkFilter));
   });
   els.resetSettingsBtn.addEventListener('click', resetSettings);
+  els.guideBtn.addEventListener('click', () => openModal('guideModal'));
+  els.welcomeNewBtn.addEventListener('click', () => { closeModal('welcomeModal'); setTimeout(openProjectSetupModal, 140); });
+  els.welcomeImportBtn.addEventListener('click', () => { closeModal('welcomeModal'); setTimeout(() => els.importFile.click(), 140); });
+  els.welcomeSampleBtn.addEventListener('click', loadSampleProject);
+  els.welcomeGuideBtn.addEventListener('click', () => { closeModal('welcomeModal'); setTimeout(() => openModal('guideModal'), 140); });
+  els.welcomeContinueBtn.addEventListener('click', () => closeModal('welcomeModal'));
+  els.projectSetupTypes.addEventListener('change', updateProjectSetupSelection);
+  els.createFromSetupBtn.addEventListener('click', createProjectFromSetup);
+  document.querySelectorAll('[data-workflow-action]').forEach((button) => button.addEventListener('click', () => navigateWorkflow(button.dataset.workflowAction)));
+  document.querySelectorAll('[data-guide-action]').forEach((button) => button.addEventListener('click', () => { closeModal('guideModal'); setTimeout(() => navigateWorkflow(button.dataset.guideAction), 140); }));
+  document.querySelectorAll('.toolbar-more-menu button').forEach((button) => button.addEventListener('click', () => { if (els.toolbarMore) els.toolbarMore.open = false; }));
 
   els.createProjectFromModalBtn.addEventListener('click', () => {
     closeModal('projectsModal');
-    createNewProject(true);
+    openProjectSetupModal();
   });
   els.projectList.addEventListener('click', handleProjectListAction);
   els.saveTemplateBtn.addEventListener('click', saveCurrentSettingsAsTemplate);
@@ -561,7 +582,7 @@ function loadInitialProject() {
     applyState(migrated);
     saveCurrentProject(false);
     updateSaveStatus('v001データを移行済み');
-    showToast('v001の保存データをv017へ移行しました。');
+    showToast('v001の保存データをv018へ移行しました。');
     return;
   }
 
@@ -581,15 +602,15 @@ function migrateLegacyData() {
     return;
   }
 
-  const legacyIndex = readJsonFromStorage(LEGACY_V16_PROJECT_INDEX_KEY, []);
+  const legacyIndex = readJsonFromStorage(LEGACY_V17_PROJECT_INDEX_KEY, []);
   let migratedCount = 0;
   let mappedCurrentId = null;
-  const legacyCurrentId = safeStorageGet(LEGACY_V16_CURRENT_PROJECT_KEY);
+  const legacyCurrentId = safeStorageGet(LEGACY_V17_CURRENT_PROJECT_KEY);
 
   if (Array.isArray(legacyIndex)) {
     legacyIndex.forEach((item) => {
       if (!item?.id) return;
-      const raw = readJsonFromStorage(`${LEGACY_V16_PROJECT_PREFIX}${item.id}`, null);
+      const raw = readJsonFromStorage(`${LEGACY_V17_PROJECT_PREFIX}${item.id}`, null);
       if (!raw) return;
       const state = normalizeState(raw);
       state.metadata.appVersion = APP_VERSION;
@@ -603,7 +624,7 @@ function migrateLegacyData() {
     });
   }
 
-  const legacyTemplates = readJsonFromStorage(LEGACY_V16_TEMPLATE_STORAGE_KEY, []);
+  const legacyTemplates = readJsonFromStorage(LEGACY_V17_TEMPLATE_STORAGE_KEY, []);
   if (Array.isArray(legacyTemplates) && legacyTemplates.length) {
     safeStorageSet(TEMPLATE_STORAGE_KEY, JSON.stringify(legacyTemplates));
   }
@@ -612,7 +633,7 @@ function migrateLegacyData() {
   safeStorageSet(MIGRATION_MARKER_KEY, 'true');
 
   if (migratedCount > 0) {
-    showToast(`v016のプロジェクト${migratedCount}件をv017へ移行しました。`);
+    showToast(`v018のプロジェクト${migratedCount}件をv018へ移行しました。`);
   }
 }
 
@@ -4709,6 +4730,7 @@ function setPdfExportBusy(busy, status = '', progress = 0) {
   els.printBtn.disabled = busy;
   els.pdfExportOverlay.hidden = !busy;
   document.body.classList.toggle('pdf-exporting', busy);
+  document.body.classList.toggle('app-busy', busy);
   if (busy) {
     els.pdfExportStatus.textContent = status;
     els.pdfExportProgress.style.width = `${Math.max(0, Math.min(100, progress))}%`;
@@ -4730,20 +4752,31 @@ function waitForFrames(count = 1) {
 
 function scheduleAutosave() {
   clearTimeout(autosaveTimer);
-  autosaveTimer = setTimeout(() => saveCurrentProject(false), AUTOSAVE_DELAY);
+  autosaveTimer = setTimeout(() => {
+    updateSaveStatus('自動保存中…');
+    requestAnimationFrame(() => saveCurrentProject(false));
+  }, AUTOSAVE_DELAY);
 }
 
 function markDirty() {
   updateSaveStatus('自動保存待ち');
+  updateWorkflowGuide();
 }
 
 function updateSaveStatus(text) {
   els.saveStatus.textContent = text;
+  if (els.topSaveStatusText) els.topSaveStatusText.textContent = text;
+  if (els.topSaveStatus) {
+    const mode = /失敗|エラー/.test(text) ? 'error' : /待ち|保存中|準備/.test(text) ? 'pending' : 'saved';
+    els.topSaveStatus.classList.remove('saved', 'pending', 'error');
+    els.topSaveStatus.classList.add(mode);
+  }
 }
 
 function refreshCurrentProjectStatus() {
   const count = loadProjectIndex().length;
   els.currentProjectStatus.textContent = `ブラウザ保存 ${count}件`;
+  updateWorkflowGuide();
 }
 
 function updateCharCount() {
@@ -5217,6 +5250,127 @@ function formatBytes(bytes) {
   if (value < 1024) return `${Math.round(value)} B`;
   if (value < 1024 * 1024) return `${(value / 1024).toFixed(value < 10240 ? 1 : 0)} KB`;
   return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+
+function maybeOpenWelcome() {
+  if (safeStorageGet(WELCOME_SEEN_KEY) === 'true') return;
+  safeStorageSet(WELCOME_SEEN_KEY, 'true');
+  openModal('welcomeModal');
+}
+
+function openProjectSetupModal() {
+  els.setupProjectName.value = '';
+  els.setupBookTitle.value = '';
+  els.setupAuthor.value = '';
+  const first = els.projectSetupTypes.querySelector('input[value="horizontal"]');
+  if (first) first.checked = true;
+  updateProjectSetupSelection();
+  openModal('projectSetupModal');
+  setTimeout(() => els.setupProjectName.focus(), 170);
+}
+
+function updateProjectSetupSelection() {
+  els.projectSetupTypes.querySelectorAll('.setup-type-card').forEach((card) => {
+    const input = card.querySelector('input[type="radio"]');
+    card.classList.toggle('selected', Boolean(input?.checked));
+  });
+}
+
+function createProjectFromSetup() {
+  const type = els.projectSetupTypes.querySelector('input[name="projectSetupType"]:checked')?.value || 'horizontal';
+  saveCurrentProject(false);
+  const settings = deepClone(DEFAULT_SETTINGS);
+  if (type === 'vertical') {
+    const preset = BUILTIN_TEMPLATES.find((item) => item.id === 'builtin-a5-vertical-literary');
+    Object.assign(settings, deepClone(preset?.settings || {}));
+  } else if (type === 'booklet') {
+    const preset = BUILTIN_TEMPLATES.find((item) => item.id === 'builtin-a4-business');
+    Object.assign(settings, deepClone(preset?.settings || {}));
+  }
+  const typeLabel = type === 'vertical' ? '縦書き書籍' : type === 'booklet' ? '冊子・資料' : '横書き書籍';
+  const state = normalizeState({
+    projectName: els.setupProjectName.value.trim() || `新規${typeLabel}`,
+    manuscript: {
+      title: els.setupBookTitle.value.trim(), subtitle: '', author: els.setupAuthor.value.trim(), body: '',
+      paragraphs: [], chapters: [], media: [], matter: deepClone(DEFAULT_BOOK_MATTER)
+    },
+    paragraphOverrides: {}, settings, metadata: {}
+  });
+  assignNewProjectMetadata(state);
+  currentProjectId = state.metadata.projectId;
+  currentProjectCreatedAt = state.metadata.createdAt;
+  applyState(state);
+  saveCurrentProject(false);
+  closeModal('projectSetupModal');
+  setManuscriptEditorMode('full', { focus: true });
+  updateSaveStatus('新規作成・保存済み');
+  updateWorkflowGuide();
+  showToast(`${typeLabel}を新しく作成しました。`);
+}
+
+function loadSampleProject() {
+  saveCurrentProject(false);
+  const state = normalizeState(deepClone(DEFAULT_STATE));
+  state.projectName = `組版アプリ ${APP_VERSION} サンプル`;
+  assignNewProjectMetadata(state);
+  currentProjectId = state.metadata.projectId;
+  currentProjectCreatedAt = state.metadata.createdAt;
+  applyState(state);
+  saveCurrentProject(false);
+  closeModal('welcomeModal');
+  setManuscriptEditorMode('full', { focus: false });
+  updateWorkflowGuide();
+  showToast('サンプル原稿を新しいプロジェクトとして開きました。');
+}
+
+function navigateWorkflow(action) {
+  const target = String(action || '');
+  if (target === 'manuscript') {
+    setManuscriptEditorMode('full', { focus: true });
+    els.manuscriptPanel?.classList.add('workflow-focus-flash');
+    setTimeout(() => els.manuscriptPanel?.classList.remove('workflow-focus-flash'), 1200);
+    return;
+  }
+  if (target === 'layout') {
+    const accordion = document.querySelector('.layout-settings-accordion');
+    if (accordion) accordion.open = true;
+    const scroller = els.settingsPanel?.querySelector('.settings-scroll');
+    if (scroller && accordion) scroller.scrollTo({ top: Math.max(0, accordion.offsetTop - 8), behavior: 'smooth' });
+    setTimeout(() => els.documentLayout?.focus(), 350);
+    return;
+  }
+  if (target === 'structure') {
+    openBookStructureModal();
+    return;
+  }
+  if (target === 'output') {
+    openPreflightModal();
+  }
+}
+
+function updateWorkflowGuide() {
+  if (!els.workflowManuscript) return;
+  const bodyText = inlineMarkupToPlainText(els.bodyInput?.value || '').replace(/\s/g, '');
+  const hasManuscript = Boolean(bodyText.length || els.titleInput?.value.trim());
+  const pageTotal = els.pages?.querySelectorAll('.paper').length || 0;
+  const hasLayout = hasManuscript && pageTotal > 0;
+  const hasStructure = hasManuscript && (chapterModel.some((item) => item.type === 'chapter') || Boolean(els.showToc?.checked));
+  const hasErrors = preflightIssues.some((item) => item.severity === 'error');
+  const outputReady = hasLayout && !hasErrors;
+  const records = [
+    [els.workflowManuscript, els.workflowManuscriptState, hasManuscript, hasManuscript ? '入力済み' : '入力する'],
+    [els.workflowLayout, els.workflowLayoutState, hasLayout, hasLayout ? `${pageTotal}ページ生成` : '見た目を整える'],
+    [els.workflowStructure, els.workflowStructureState, hasStructure, hasStructure ? '章構造あり' : '目次・奥付'],
+    [els.workflowOutput, els.workflowOutputState, outputReady, outputReady ? 'PDF保存可能' : hasErrors ? '修正が必要' : '問題を確認']
+  ];
+  records.forEach(([button, label, done, text]) => {
+    button?.classList.toggle('done', Boolean(done));
+    if (label) label.textContent = text;
+  });
+  records.forEach(([button]) => button?.classList.remove('current'));
+  const current = !hasManuscript ? els.workflowManuscript : !hasLayout ? els.workflowLayout : !hasStructure ? els.workflowStructure : els.workflowOutput;
+  current?.classList.add('current');
 }
 
 function escapeAttribute(value) {

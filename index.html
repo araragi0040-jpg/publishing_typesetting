@@ -4,8 +4,8 @@
 <head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1" name="viewport"/>
-<meta content="出版社向け簡易組版アプリ v017" name="description"/>
-<title>組版アプリ v017</title>
+<meta content="出版社向け簡易組版アプリ v018" name="description"/>
+<title>組版アプリ v018</title>
 <link href="styles.css" rel="stylesheet"/>
 <link rel="icon" href="data:,">
 </head>
@@ -14,30 +14,52 @@
 <header class="topbar">
 <div class="brand-block">
 <strong>組版アプリ</strong>
-<span class="version-badge">v017</span>
+<span class="version-badge">v018</span>
 </div>
 <label class="project-name-wrap">
 <span>プロジェクト名</span>
 <input id="projectName" maxlength="80" type="text" value="新規組版データ"/>
 </label>
+<div class="top-save-status saved" id="topSaveStatus" aria-live="polite"><span class="top-save-dot" aria-hidden="true"></span><span id="topSaveStatusText">自動保存を準備中</span></div>
 <div aria-label="ファイル操作" class="toolbar">
-<button class="button secondary" id="newBtn" type="button">新規</button>
-<button class="button secondary" id="projectsBtn" type="button">プロジェクト</button>
+<div class="toolbar-group toolbar-project-group" aria-label="プロジェクト操作">
+<button class="button secondary" id="newBtn" type="button">新しく作る</button>
+<button class="button secondary" id="projectsBtn" type="button">開く</button>
 <button class="button secondary" id="saveBtn" type="button">保存</button>
-<button class="button secondary" id="duplicateBtn" type="button">複製</button>
-<button class="button secondary" id="templatesBtn" type="button">テンプレート</button>
-<button class="button secondary" id="exportBtn" type="button">JSON出力</button>
-<button class="button secondary" id="importBtn" type="button">JSON読込</button>
-<button class="button check-button" id="manuscriptCheckBtn" type="button">原稿チェック <span class="check-count-badge" id="manuscriptCheckBadge">0</span></button>
+</div>
+<div class="toolbar-group toolbar-content-group" aria-label="書籍内容">
 <button class="button secondary book-structure-button" id="bookStructureBtn" type="button">書籍構成 <span class="structure-count-badge" id="bookStructureBadge">0</span></button>
-<button class="button secondary media-manager-button" id="mediaManagerBtn" type="button">画像・図表 <span class="media-count-badge" id="mediaCountBadge">0</span></button>
+<button class="button secondary media-manager-button" id="mediaManagerBtn" type="button">画像 <span class="media-count-badge" id="mediaCountBadge">0</span></button>
+</div>
+<div class="toolbar-group toolbar-output-group" aria-label="確認と出力">
+<button class="button check-button" id="manuscriptCheckBtn" type="button">原稿チェック <span class="check-count-badge" id="manuscriptCheckBadge">0</span></button>
 <button class="button preflight-button" id="preflightBtn" type="button">出力前チェック <span class="preflight-count-badge" id="preflightBadge">–</span></button>
 <button class="button primary" id="printBtn" type="button">PDF保存</button>
+</div>
+<details class="toolbar-more" id="toolbarMore">
+<summary>その他</summary>
+<div class="toolbar-more-menu">
+<button class="toolbar-menu-button" id="duplicateBtn" type="button"><strong>複製</strong><span>現在の案件をコピー</span></button>
+<button class="toolbar-menu-button" id="templatesBtn" type="button"><strong>テンプレート</strong><span>組版設定を保存・適用</span></button>
+<button class="toolbar-menu-button" id="exportBtn" type="button"><strong>JSON出力</strong><span>バックアップを書き出す</span></button>
+<button class="toolbar-menu-button" id="importBtn" type="button"><strong>JSON読込</strong><span>保存データを別案件として開く</span></button>
+</div>
+</details>
 <input accept="application/json,.json" hidden="" id="importFile" type="file"/>
 </div>
 </header>
+<nav class="workflow-bar" aria-label="基本の作業手順">
+<div class="workflow-title"><strong>基本の流れ</strong><span>迷ったら左から順番に進めます</span></div>
+<div class="workflow-steps">
+<button class="workflow-step" data-workflow-action="manuscript" id="workflowManuscript" type="button"><span>1</span><div><strong>原稿</strong><small id="workflowManuscriptState">入力する</small></div></button>
+<button class="workflow-step" data-workflow-action="layout" id="workflowLayout" type="button"><span>2</span><div><strong>組版</strong><small id="workflowLayoutState">見た目を整える</small></div></button>
+<button class="workflow-step" data-workflow-action="structure" id="workflowStructure" type="button"><span>3</span><div><strong>構成</strong><small id="workflowStructureState">目次・奥付</small></div></button>
+<button class="workflow-step" data-workflow-action="output" id="workflowOutput" type="button"><span>4</span><div><strong>確認・PDF</strong><small id="workflowOutputState">問題を確認</small></div></button>
+</div>
+<button class="workflow-help-button" id="guideBtn" type="button">使い方</button>
+</nav>
 <main class="workspace">
-<section aria-labelledby="manuscriptTitle" class="panel manuscript-panel">
+<section aria-labelledby="manuscriptTitle" class="panel manuscript-panel" id="manuscriptPanel">
   <div class="panel-header manuscript-header">
     <div>
       <p class="eyebrow">MANUSCRIPT</p>
@@ -110,9 +132,9 @@
       </div>
       <label class="field body-field full-body-field">
         <span>本文全体</span>
-        <textarea id="bodyInput" placeholder="ここに本文を貼り付けてください。" spellcheck="false"># 第1章　組版アプリv017
+        <textarea id="bodyInput" placeholder="ここに本文を貼り付けてください。" spellcheck="false"># 第1章　組版アプリv018
 
-これは、組版アプリv017の動作確認用原稿です。用紙設定から「縦書き・右綴じ」へ切り替えると、同じ原稿を縦書きで確認できます。
+これは、組版アプリv018の動作確認用原稿です。用紙設定から「縦書き・右綴じ」へ切り替えると、同じ原稿を縦書きで確認できます。
 
 文字を選択して、**太字**、《《傍点》》、｜組版《くみはん》、__下線__を設定できます。記号はプレビューやPDFには表示されません。
 
@@ -233,7 +255,7 @@
     </div>
   </div>
 </section>
-<section aria-labelledby="previewTitle" class="preview-panel">
+<section aria-labelledby="previewTitle" class="preview-panel" id="previewPanel">
 <div class="preview-toolbar">
 <div>
 <p class="eyebrow">PREVIEW</p>
@@ -271,7 +293,7 @@
 <span id="saveStatus">未保存</span>
 </footer>
 </section>
-<aside aria-labelledby="settingsTitle" class="panel settings-panel">
+<aside aria-labelledby="settingsTitle" class="panel settings-panel" id="settingsPanel">
 <div class="panel-header">
 <div>
 <p class="eyebrow">SETTINGS</p>
@@ -655,6 +677,68 @@
 </div>
 <div aria-hidden="true" class="measure-root" id="measureRoot"></div>
 <div aria-live="polite" class="toast" id="toast" role="status"></div>
+<div class="modal-backdrop" hidden id="welcomeModal">
+<section aria-labelledby="welcomeModalTitle" aria-modal="true" class="modal-card onboarding-modal-card" role="dialog">
+<div class="welcome-hero">
+<div class="welcome-brand"><span>組</span><div><p>TYPESETTING WORKSPACE</p><strong>組版アプリ v018</strong></div></div>
+<h2 id="welcomeModalTitle">何から始めますか？</h2>
+<p>既存原稿の貼り付けからPDF保存まで、画面の案内に沿って進められます。</p>
+</div>
+<div class="welcome-choice-grid">
+<button class="welcome-choice primary-choice" id="welcomeNewBtn" type="button"><span class="welcome-choice-icon">＋</span><strong>新しい書籍を作る</strong><small>横書き・縦書き・冊子から選択</small></button>
+<button class="welcome-choice" id="welcomeImportBtn" type="button"><span class="welcome-choice-icon">↥</span><strong>JSONを開く</strong><small>以前に保存した案件を読み込む</small></button>
+<button class="welcome-choice" id="welcomeSampleBtn" type="button"><span class="welcome-choice-icon">▶</span><strong>サンプルで試す</strong><small>機能を確認できる原稿を開く</small></button>
+</div>
+<div class="welcome-footer">
+<button class="text-button" id="welcomeGuideBtn" type="button">先に使い方を見る</button>
+<button class="button modal-secondary" id="welcomeContinueBtn" type="button">現在の画面を開く</button>
+</div>
+</section>
+</div>
+
+<div class="modal-backdrop" hidden id="projectSetupModal">
+<section aria-labelledby="projectSetupTitle" aria-modal="true" class="modal-card setup-modal-card" role="dialog">
+<header class="modal-header">
+<div><p class="eyebrow">NEW PROJECT</p><h2 id="projectSetupTitle">新しい書籍を作る</h2></div>
+<button aria-label="閉じる" class="icon-button" data-close-modal="projectSetupModal" type="button">×</button>
+</header>
+<div class="setup-modal-scroll">
+<div class="setup-step-copy"><span>1</span><div><strong>作りたい形式を選択</strong><p>後からすべて変更できます。迷った場合は「横書きの書籍」がおすすめです。</p></div></div>
+<div class="setup-type-grid" id="projectSetupTypes">
+<label class="setup-type-card selected"><input checked name="projectSetupType" type="radio" value="horizontal"/><span class="setup-type-visual horizontal-visual"><i></i><i></i><i></i></span><strong>横書きの書籍</strong><small>A5・左綴じ／一般書・実用書</small></label>
+<label class="setup-type-card"><input name="projectSetupType" type="radio" value="vertical"/><span class="setup-type-visual vertical-visual"><i></i><i></i><i></i></span><strong>縦書きの書籍</strong><small>A5・右綴じ／小説・文芸書</small></label>
+<label class="setup-type-card"><input name="projectSetupType" type="radio" value="booklet"/><span class="setup-type-visual booklet-visual"><i></i><i></i><i></i></span><strong>冊子・資料</strong><small>A4・左綴じ／案内冊子・社内資料</small></label>
+</div>
+<div class="setup-step-copy second"><span>2</span><div><strong>最低限の書籍情報</strong><p>空欄のままでも始められます。</p></div></div>
+<div class="setup-field-grid">
+<label class="field"><span>プロジェクト名</span><input id="setupProjectName" maxlength="80" placeholder="例：新刊小説_初稿" type="text"/></label>
+<label class="field"><span>書名</span><input id="setupBookTitle" maxlength="160" placeholder="後から入力できます" type="text"/></label>
+<label class="field"><span>著者名</span><input id="setupAuthor" maxlength="100" placeholder="後から入力できます" type="text"/></label>
+</div>
+</div>
+<footer class="setup-modal-footer"><button class="button modal-secondary" data-close-modal="projectSetupModal" type="button">キャンセル</button><button class="button modal-primary" id="createFromSetupBtn" type="button">この設定で始める</button></footer>
+</section>
+</div>
+
+<div class="modal-backdrop" hidden id="guideModal">
+<section aria-labelledby="guideModalTitle" aria-modal="true" class="modal-card guide-modal-card" role="dialog">
+<header class="modal-header">
+<div><p class="eyebrow">QUICK GUIDE</p><h2 id="guideModalTitle">4つの手順でPDFを作成</h2></div>
+<button aria-label="閉じる" class="icon-button" data-close-modal="guideModal" type="button">×</button>
+</header>
+<div class="guide-modal-scroll">
+<div class="guide-intro"><strong>すべての設定を触る必要はありません</strong><p>まず原稿を入れ、中央のプレビューを見ながら必要な部分だけ調整してください。</p></div>
+<div class="guide-step-list">
+<article class="guide-step-card"><span>1</span><div><strong>原稿を入力する</strong><p>Wordなどから全文を貼り付けます。章ごとに管理したい場合は「章別編集」へ切り替えます。</p><button class="text-button guide-action" data-guide-action="manuscript" type="button">原稿編集へ移動</button></div></article>
+<article class="guide-step-card"><span>2</span><div><strong>組版設定を整える</strong><p>横書き・縦書き、用紙、余白、フォント、文字サイズを設定します。通常はテンプレートのままでも使えます。</p><button class="text-button guide-action" data-guide-action="layout" type="button">組版設定へ移動</button></div></article>
+<article class="guide-step-card"><span>3</span><div><strong>目次や奥付を追加する</strong><p>必要なページだけ「書籍構成」からONにします。本文の # 見出しから目次を自動生成できます。</p><button class="text-button guide-action" data-guide-action="structure" type="button">書籍構成を開く</button></div></article>
+<article class="guide-step-card"><span>4</span><div><strong>確認してPDF保存</strong><p>出力前チェックで問題箇所を確認した後、PCの印刷設定を使わずPDFを直接保存します。</p><button class="text-button guide-action" data-guide-action="output" type="button">出力前チェックを開く</button></div></article>
+</div>
+</div>
+<footer class="guide-modal-footer"><span>右上の「使い方」からいつでも開けます。</span><button class="button modal-primary" data-close-modal="guideModal" type="button">閉じる</button></footer>
+</section>
+</div>
+
 <div class="modal-backdrop" hidden="" id="projectsModal">
 <section aria-labelledby="projectsModalTitle" aria-modal="true" class="modal-card wide" role="dialog">
 <header class="modal-header">
