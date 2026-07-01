@@ -4,8 +4,8 @@
 <head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1" name="viewport"/>
-<meta content="出版社向け簡易組版アプリ v014" name="description"/>
-<title>組版アプリ v014</title>
+<meta content="出版社向け簡易組版アプリ v015" name="description"/>
+<title>組版アプリ v015</title>
 <link href="styles.css" rel="stylesheet"/>
 <link rel="icon" href="data:,">
 </head>
@@ -14,7 +14,7 @@
 <header class="topbar">
 <div class="brand-block">
 <strong>組版アプリ</strong>
-<span class="version-badge">v014</span>
+<span class="version-badge">v015</span>
 </div>
 <label class="project-name-wrap">
 <span>プロジェクト名</span>
@@ -29,6 +29,7 @@
 <button class="button secondary" id="exportBtn" type="button">JSON出力</button>
 <button class="button secondary" id="importBtn" type="button">JSON読込</button>
 <button class="button check-button" id="manuscriptCheckBtn" type="button">原稿チェック <span class="check-count-badge" id="manuscriptCheckBadge">0</span></button>
+<button class="button secondary media-manager-button" id="mediaManagerBtn" type="button">画像・図表 <span class="media-count-badge" id="mediaCountBadge">0</span></button>
 <button class="button primary" id="printBtn" type="button">PDF保存</button>
 <input accept="application/json,.json" hidden="" id="importFile" type="file"/>
 </div>
@@ -102,15 +103,18 @@
           <button class="format-action" data-inline-format="ruby" type="button" title="選択した文字にルビを付ける"><span class="format-symbol ruby-symbol">ル</span><span>ルビ</span></button>
           <button class="format-action" data-inline-format="underline" type="button" title="選択した文字に下線を付ける"><u>U</u><span>下線</span></button>
           <button class="format-action subtle" data-inline-format="clear" type="button" title="選択範囲の装飾を解除"><span class="format-symbol">×</span><span>解除</span></button>
+          <button class="format-action media-insert-action" data-media-target="bodyInput" type="button" title="カーソル位置へ画像を挿入"><span class="format-symbol">▧</span><span>画像</span></button>
         </div>
       </div>
       <label class="field body-field full-body-field">
         <span>本文全体</span>
-        <textarea id="bodyInput" placeholder="ここに本文を貼り付けてください。" spellcheck="false"># 第1章　組版アプリv014
+        <textarea id="bodyInput" placeholder="ここに本文を貼り付けてください。" spellcheck="false"># 第1章　組版アプリv015
 
-これは、組版アプリv014の動作確認用原稿です。用紙設定から「縦書き・右綴じ」へ切り替えると、同じ原稿を縦書きで確認できます。
+これは、組版アプリv015の動作確認用原稿です。用紙設定から「縦書き・右綴じ」へ切り替えると、同じ原稿を縦書きで確認できます。
 
 文字を選択して、**太字**、《《傍点》》、｜組版《くみはん》、__下線__を設定できます。記号はプレビューやPDFには表示されません。
+
+「画像」ボタンから写真や図を追加し、本文中の好きな位置へ挿入できます。画像の幅、配置、キャプションは専用画面から変更できます。
 
 右側の設定を変更すると、用紙サイズ、余白、フォント、文字サイズ、文字間、行間が中央のプレビューへ自動反映されます。
 
@@ -143,7 +147,11 @@
           <strong>文字装飾の記法</strong>
           <span><code>**太字**</code>　<code>《《傍点》》</code>　<code>｜漢字《かんじ》</code>　<code>__下線__</code></span>
         </div>
-        <small>通常は文字を選択して上のボタンを押してください。記号はプレビュー・PDFには表示されません。</small>
+        <div>
+          <strong>画像・図表</strong>
+          <span>上の「画像」ボタンからアップロードし、カーソル位置へ挿入します。</span>
+        </div>
+        <small>文字装飾や画像位置の記号は、プレビュー・PDFには表示されません。</small>
       </div>
     </div>
 
@@ -194,6 +202,7 @@
               <button class="format-action" data-inline-format="ruby" type="button"><span class="format-symbol ruby-symbol">ル</span><span>ルビ</span></button>
               <button class="format-action" data-inline-format="underline" type="button"><u>U</u><span>下線</span></button>
               <button class="format-action subtle" data-inline-format="clear" type="button"><span class="format-symbol">×</span><span>解除</span></button>
+              <button class="format-action media-insert-action" data-media-target="chapterBodyInput" type="button"><span class="format-symbol">▧</span><span>画像</span></button>
             </div>
           </div>
           <label class="field chapter-body-field">
@@ -673,6 +682,44 @@
 </section>
 </div>
 
+
+<div class="modal-backdrop" hidden id="mediaModal">
+<section aria-labelledby="mediaModalTitle" aria-modal="true" class="modal-card media-modal-card" role="dialog">
+<header class="modal-header">
+<div>
+<p class="eyebrow">IMAGES &amp; FIGURES</p>
+<h2 id="mediaModalTitle">画像・図表</h2>
+</div>
+<button aria-label="閉じる" class="icon-button" data-close-modal="mediaModal" type="button">×</button>
+</header>
+<div class="media-intro-card">
+<div class="media-step"><span>1</span><div><strong>画像を追加</strong><small>JPEG・PNG・WebPに対応</small></div></div>
+<div class="media-step"><span>2</span><div><strong>見た目を設定</strong><small>幅・配置・キャプション</small></div></div>
+<div class="media-step"><span>3</span><div><strong>本文へ挿入</strong><small>選択中の編集欄へ追加</small></div></div>
+</div>
+<div class="media-toolbar-row">
+<label class="media-upload-button">
+<input id="mediaFileInput" type="file" accept="image/jpeg,image/png,image/webp" multiple hidden>
+<span aria-hidden="true">＋</span>
+<strong>画像をアップロード</strong>
+<small>自動で保存向けに最適化します</small>
+</label>
+<div class="media-storage-card">
+<span>画像保存容量</span>
+<strong id="mediaStorageSummary">0 KB / 約3.2 MB</strong>
+<div class="media-storage-track" aria-hidden="true"><span id="mediaStorageProgress"></span></div>
+<small>重要な案件はJSONも保存してください。</small>
+</div>
+</div>
+<div class="media-target-note" id="mediaTargetNote">全文編集のカーソル位置へ挿入します。</div>
+<div class="media-library-list" id="mediaLibraryList"></div>
+<div class="media-empty-state" id="mediaEmptyState">
+<div aria-hidden="true">▧</div>
+<strong>画像はまだありません</strong>
+<p>「画像をアップロード」から追加してください。</p>
+</div>
+</section>
+</div>
 
 <div class="modal-backdrop" hidden id="manuscriptCheckModal">
 <section aria-labelledby="manuscriptCheckModalTitle" aria-modal="true" class="modal-card check-modal-card" role="dialog">

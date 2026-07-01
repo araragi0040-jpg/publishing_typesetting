@@ -1,20 +1,24 @@
 'use strict';
 
-const APP_VERSION = 'v014';
-const SCHEMA_VERSION = 14;
+const APP_VERSION = 'v015';
+const SCHEMA_VERSION = 15;
 const AUTOSAVE_DELAY = 700;
+const MAX_MEDIA_ASSETS = 20;
+const MAX_MEDIA_DATA_CHARS = 3_200_000;
+const MAX_MEDIA_SOURCE_BYTES = 12 * 1024 * 1024;
+const MEDIA_MARKER_PATTERN = /^\s*\[\[figure:([a-zA-Z0-9_-]+)\]\]\s*$/;
 
-const PROJECT_INDEX_KEY = 'typesetting-app-v014-project-index';
-const PROJECT_PREFIX = 'typesetting-app-v014-project:';
-const CURRENT_PROJECT_KEY = 'typesetting-app-v014-current-project';
-const TEMPLATE_STORAGE_KEY = 'typesetting-app-v014-templates';
+const PROJECT_INDEX_KEY = 'typesetting-app-v015-project-index';
+const PROJECT_PREFIX = 'typesetting-app-v015-project:';
+const CURRENT_PROJECT_KEY = 'typesetting-app-v015-current-project';
+const TEMPLATE_STORAGE_KEY = 'typesetting-app-v015-templates';
 
-const LEGACY_V13_PROJECT_INDEX_KEY = 'typesetting-app-v013-project-index';
-const LEGACY_V13_PROJECT_PREFIX = 'typesetting-app-v013-project:';
-const LEGACY_V13_CURRENT_PROJECT_KEY = 'typesetting-app-v013-current-project';
-const LEGACY_V13_TEMPLATE_STORAGE_KEY = 'typesetting-app-v013-templates';
+const LEGACY_V14_PROJECT_INDEX_KEY = 'typesetting-app-v014-project-index';
+const LEGACY_V14_PROJECT_PREFIX = 'typesetting-app-v014-project:';
+const LEGACY_V14_CURRENT_PROJECT_KEY = 'typesetting-app-v014-current-project';
+const LEGACY_V14_TEMPLATE_STORAGE_KEY = 'typesetting-app-v014-templates';
 const LEGACY_V1_STORAGE_KEY = 'typesetting-app-v001';
-const MIGRATION_MARKER_KEY = 'typesetting-app-v014-migration-complete';
+const MIGRATION_MARKER_KEY = 'typesetting-app-v015-migration-complete';
 
 const DEFAULT_SETTINGS = Object.freeze({
   paperPreset: 'A5',
@@ -99,11 +103,11 @@ const DEFAULT_SETTINGS = Object.freeze({
 
 const SAMPLE_MANUSCRIPT = Object.freeze({
   title: 'サンプルタイトル',
-  subtitle: '文字装飾・ルビ対応の確認用原稿',
+  subtitle: '画像・図表対応の確認用原稿',
   author: '著者名',
-  body: `# 第1章　組版アプリv014
+  body: `# 第1章　組版アプリv015
 
-これは、組版アプリv014の動作確認用原稿です。用紙設定から「縦書き・右綴じ」へ切り替えると、同じ原稿を縦書きで確認できます。
+これは、組版アプリv015の動作確認用原稿です。用紙設定から「縦書き・右綴じ」へ切り替えると、同じ原稿を縦書きで確認できます。
 
 文字を選択して、**太字**、《《傍点》》、｜組版《くみはん》、__下線__を設定できます。記号はプレビューやPDFには表示されません。
 
@@ -131,8 +135,8 @@ const SAMPLE_MANUSCRIPT = Object.freeze({
 });
 
 const DEFAULT_STATE = Object.freeze({
-  projectName: '組版アプリ v014 サンプル',
-  manuscript: { ...SAMPLE_MANUSCRIPT, paragraphs: [], chapters: [] },
+  projectName: '組版アプリ v015 サンプル',
+  manuscript: { ...SAMPLE_MANUSCRIPT, paragraphs: [], chapters: [], media: [] },
   paragraphOverrides: {},
   settings: DEFAULT_SETTINGS,
   metadata: {
@@ -217,8 +221,11 @@ let isApplyingChapterEdit = false;
 let manuscriptIssues = [];
 let manuscriptCheckFilter = 'all';
 let manuscriptCheckTimer = null;
+let mediaAssets = [];
+let mediaInsertTarget = 'bodyInput';
+let selectedMediaId = null;
 const MAX_MANUSCRIPT_ISSUES = 300;
-const MANUSCRIPT_MODE_KEY = 'typesetting-app-v014-manuscript-mode';
+const MANUSCRIPT_MODE_KEY = 'typesetting-app-v015-manuscript-mode';
 
 window.addEventListener('DOMContentLoaded', init);
 
@@ -238,6 +245,7 @@ function init() {
   updateTocControls();
   updateJapaneseTypesettingControls();
   updateDocumentLayoutControls();
+  updateMediaUi();
   scheduleManuscriptCheck(0);
   scheduleRender();
   refreshCurrentProjectStatus();
@@ -286,7 +294,10 @@ function cacheElements() {
     'manuscriptCheckTotal', 'manuscriptCheckWarnings', 'manuscriptCheckFixable',
     'rerunManuscriptCheckBtn', 'fixSafeManuscriptIssuesBtn', 'manuscriptCheckList',
     'manuscriptCheckEmpty', 'manuscriptCheckFooterNote',
-    'pdfExportOverlay', 'pdfExportStatus', 'pdfExportProgress'
+    'pdfExportOverlay', 'pdfExportStatus', 'pdfExportProgress',
+    'mediaManagerBtn', 'mediaCountBadge', 'mediaModal', 'mediaFileInput',
+    'mediaStorageSummary', 'mediaStorageProgress', 'mediaTargetNote',
+    'mediaLibraryList', 'mediaEmptyState'
   ];
 
   ids.forEach((id) => {
@@ -357,6 +368,14 @@ function bindEvents() {
   [els.bodyInput, els.chapterBodyInput].forEach((textarea) => {
     textarea.addEventListener('keydown', handleInlineFormattingShortcut);
   });
+  document.querySelectorAll('[data-media-target]').forEach((button) => {
+    button.addEventListener('click', () => openMediaManager(button.dataset.mediaTarget || 'bodyInput'));
+  });
+  els.mediaManagerBtn.addEventListener('click', () => openMediaManager(manuscriptEditorMode === 'chapters' && selectedChapterIndex >= 0 ? 'chapterBodyInput' : 'bodyInput'));
+  els.mediaFileInput.addEventListener('change', handleMediaFilesSelected);
+  els.mediaLibraryList.addEventListener('input', handleMediaLibraryInput);
+  els.mediaLibraryList.addEventListener('change', handleMediaLibraryInput);
+  els.mediaLibraryList.addEventListener('click', handleMediaLibraryClick);
   els.chapterList.addEventListener('click', handleChapterListClick);
   els.addChapterBtn.addEventListener('click', addChapter);
   els.addFirstChapterBtn.addEventListener('click', addChapter);
@@ -402,6 +421,12 @@ function bindEvents() {
   });
 
   els.pages.addEventListener('click', (event) => {
+    const figure = event.target.closest('.figure-block[data-media-id]');
+    if (figure) {
+      selectedMediaId = figure.dataset.mediaId || null;
+      openMediaManager(manuscriptEditorMode === 'chapters' && selectedChapterIndex >= 0 ? 'chapterBodyInput' : 'bodyInput', selectedMediaId);
+      return;
+    }
     const paragraph = event.target.closest('.body-paragraph[data-paragraph-id]');
     if (!paragraph) return;
     selectParagraph(paragraph.dataset.paragraphId, false);
@@ -494,7 +519,7 @@ function loadInitialProject() {
     applyState(migrated);
     saveCurrentProject(false);
     updateSaveStatus('v001データを移行済み');
-    showToast('v001の保存データをv014へ移行しました。');
+    showToast('v001の保存データをv015へ移行しました。');
     return;
   }
 
@@ -514,15 +539,15 @@ function migrateLegacyData() {
     return;
   }
 
-  const legacyIndex = readJsonFromStorage(LEGACY_V13_PROJECT_INDEX_KEY, []);
+  const legacyIndex = readJsonFromStorage(LEGACY_V14_PROJECT_INDEX_KEY, []);
   let migratedCount = 0;
   let mappedCurrentId = null;
-  const legacyCurrentId = safeStorageGet(LEGACY_V13_CURRENT_PROJECT_KEY);
+  const legacyCurrentId = safeStorageGet(LEGACY_V14_CURRENT_PROJECT_KEY);
 
   if (Array.isArray(legacyIndex)) {
     legacyIndex.forEach((item) => {
       if (!item?.id) return;
-      const raw = readJsonFromStorage(`${LEGACY_V13_PROJECT_PREFIX}${item.id}`, null);
+      const raw = readJsonFromStorage(`${LEGACY_V14_PROJECT_PREFIX}${item.id}`, null);
       if (!raw) return;
       const state = normalizeState(raw);
       state.metadata.appVersion = APP_VERSION;
@@ -536,7 +561,7 @@ function migrateLegacyData() {
     });
   }
 
-  const legacyTemplates = readJsonFromStorage(LEGACY_V13_TEMPLATE_STORAGE_KEY, []);
+  const legacyTemplates = readJsonFromStorage(LEGACY_V14_TEMPLATE_STORAGE_KEY, []);
   if (Array.isArray(legacyTemplates) && legacyTemplates.length) {
     safeStorageSet(TEMPLATE_STORAGE_KEY, JSON.stringify(legacyTemplates));
   }
@@ -545,7 +570,7 @@ function migrateLegacyData() {
   safeStorageSet(MIGRATION_MARKER_KEY, 'true');
 
   if (migratedCount > 0) {
-    showToast(`v013のプロジェクト${migratedCount}件をv014へ移行しました。`);
+    showToast(`v014のプロジェクト${migratedCount}件をv015へ移行しました。`);
   }
 }
 
@@ -1937,6 +1962,10 @@ function paginate(state) {
       appendBodyHeading(record, recordIndex);
       return;
     }
+    if (record.type === 'figure') {
+      appendBodyFigure(record, recordIndex);
+      return;
+    }
     appendBodyParagraph(record, recordIndex);
   });
 
@@ -1989,6 +2018,33 @@ function paginate(state) {
       type: 'body-heading',
       record: deepClone(record),
       recordIndex,
+      blankLinesBefore
+    });
+  }
+
+  function appendBodyFigure(record, recordIndex) {
+    const asset = findMediaAsset(record.mediaId, state.manuscript.media);
+    const blankLinesBefore = state.settings.preserveBlankLines
+      ? sanitizeBlankLineCount(record.blankLinesBefore)
+      : 0;
+
+    if (asset?.pageBreakBefore && content.childElementCount > 0) startNewPage();
+
+    const element = createFigureElement(record, asset, state.settings, {
+      blankLinesBefore,
+      selectable: false
+    });
+    content.appendChild(element);
+    if (!fits(content) && content.childElementCount > 1) {
+      element.remove();
+      startNewPage();
+      content.appendChild(element);
+    }
+
+    pages[pageIndex].push({
+      type: 'figure',
+      record: deepClone(record),
+      mediaId: record.mediaId,
       blankLinesBefore
     });
   }
@@ -2305,6 +2361,59 @@ function findSafeJapaneseBreak(text, index, maxDistance = 64) {
   return fallback;
 }
 
+function findMediaAsset(mediaId, source = mediaAssets) {
+  return (Array.isArray(source) ? source : []).find((asset) => asset?.id === mediaId) || null;
+}
+
+function createFigureElement(record, asset, settings = DEFAULT_SETTINGS, options = {}) {
+  const figure = document.createElement('figure');
+  figure.className = `figure-block figure-align-${asset?.align || 'center'}`;
+  figure.dataset.mediaId = String(record?.mediaId || asset?.id || '');
+  const widthPercent = Math.max(25, Math.min(100, Math.trunc(sanitizeNumber(asset?.widthPercent, 100))));
+  figure.style.width = `${widthPercent}%`;
+
+  const blankCount = settings.preserveBlankLines
+    ? sanitizeBlankLineCount(options.blankLinesBefore ?? record?.blankLinesBefore)
+    : 0;
+  const blankSpace = blankCount * sanitizeNumber(settings.lineHeight, 15) * Math.max(0, sanitizeNumber(settings.blankLineScale, 1));
+  const spaceBefore = Math.max(0, sanitizeNumber(asset?.spaceBefore, 3));
+  const spaceAfter = Math.max(0, sanitizeNumber(asset?.spaceAfter, 3));
+  if (blankSpace > 0) figure.style.paddingBlockStart = `calc(${blankSpace}pt + ${spaceBefore}mm)`;
+  else if (spaceBefore > 0) figure.style.paddingBlockStart = `${spaceBefore}mm`;
+  if (spaceAfter > 0) figure.style.paddingBlockEnd = `${spaceAfter}mm`;
+
+  if (!asset?.dataUrl) {
+    const missing = document.createElement('div');
+    missing.className = 'figure-missing';
+    missing.textContent = '画像データが見つかりません。画像・図表画面から確認してください。';
+    figure.appendChild(missing);
+    return figure;
+  }
+
+  const frame = document.createElement('div');
+  frame.className = 'figure-media-frame';
+  const image = document.createElement('img');
+  image.src = asset.dataUrl;
+  image.alt = String(asset.alt || asset.caption || asset.fileName || '');
+  image.loading = 'eager';
+  image.decoding = 'sync';
+  if (asset.width && asset.height) image.style.aspectRatio = `${asset.width} / ${asset.height}`;
+  const availableHeight = Math.max(25, sanitizeNumber(settings.pageHeight, 210) - sanitizeNumber(settings.marginTop, 15) - sanitizeNumber(settings.marginBottom, 18) - 18);
+  image.style.maxHeight = `${availableHeight}mm`;
+  frame.appendChild(image);
+  figure.appendChild(frame);
+
+  if (asset.caption) {
+    const caption = document.createElement('figcaption');
+    caption.className = 'figure-caption';
+    setTypesetText(caption, asset.caption, { ...settings, writingMode: 'horizontal-tb' });
+    figure.appendChild(caption);
+  }
+
+  if (options.selectable) figure.tabIndex = 0;
+  return figure;
+}
+
 function createHeadingElement(manuscript, settings = DEFAULT_SETTINGS) {
   if (!manuscript.title && !manuscript.subtitle && !manuscript.author) return null;
   const wrap = document.createElement('section');
@@ -2332,7 +2441,7 @@ function createHeadingElement(manuscript, settings = DEFAULT_SETTINGS) {
 }
 
 function getEditableParagraphRecords() {
-  return paragraphRecords.filter((record) => record.type !== 'heading');
+  return paragraphRecords.filter((record) => record.type === 'paragraph');
 }
 
 function getEditableParagraphIndex(paragraphId) {
@@ -2387,6 +2496,12 @@ function createBodyHeadingElement(record, settings = DEFAULT_SETTINGS, options =
 }
 
 function createKeepWithNextProbe(record, state, requiredLines = 1) {
+  if (record.type === 'figure') {
+    return createFigureElement(record, findMediaAsset(record.mediaId, state.manuscript.media), state.settings, {
+      blankLinesBefore: state.settings.preserveBlankLines ? sanitizeBlankLineCount(record.blankLinesBefore) : 0,
+      selectable: false
+    });
+  }
   if (record.type === 'heading') {
     return createBodyHeadingElement(record, state.settings, {
       blankLinesBefore: state.settings.preserveBlankLines
@@ -2537,6 +2652,20 @@ function parseBodyStructure(text) {
       return;
     }
 
+    const figureMatch = line.match(MEDIA_MARKER_PATTERN);
+    if (figureMatch) {
+      flushParagraph();
+      records.push({
+        type: 'figure',
+        level: null,
+        text: line.trim(),
+        mediaId: figureMatch[1],
+        blankLinesBefore: sanitizeBlankLineCount(pendingBlankLines)
+      });
+      pendingBlankLines = 0;
+      return;
+    }
+
     const headingMatch = line.match(/^\s*(#{1,3})[\t \u3000]+(.+?)\s*$/);
     if (headingMatch) {
       flushParagraph();
@@ -2572,10 +2701,11 @@ function normalizeParagraphs(text) {
 
 function createParagraphRecords(text) {
   return parseBodyStructure(text).paragraphs.map((record) => ({
-    id: createId(record.type === 'heading' ? 'heading' : 'paragraph'),
+    id: createId(record.type === 'heading' ? 'heading' : record.type === 'figure' ? 'figure' : 'paragraph'),
     type: record.type,
     level: record.type === 'heading' ? record.level : null,
     text: record.text,
+    mediaId: record.type === 'figure' ? record.mediaId : null,
     blankLinesBefore: record.blankLinesBefore
   }));
 }
@@ -2612,6 +2742,12 @@ function buildPreview(pageFragments, settings, manuscript) {
       } else if (fragment.type === 'body-heading') {
         content.appendChild(createBodyHeadingElement(fragment.record, settings, {
           blankLinesBefore: fragment.blankLinesBefore
+        }));
+      } else if (fragment.type === 'figure') {
+        const asset = findMediaAsset(fragment.mediaId, manuscript.media);
+        content.appendChild(createFigureElement(fragment.record, asset, settings, {
+          blankLinesBefore: fragment.blankLinesBefore,
+          selectable: true
         }));
       } else if (fragment.type === 'paragraph') {
         content.appendChild(createParagraphElement(fragment.text, {
@@ -2806,7 +2942,7 @@ function appendPlainTypesetText(parent, value, settings = DEFAULT_SETTINGS) {
 }
 
 function inlineMarkupToPlainText(value) {
-  let result = String(value ?? '');
+  let result = String(value ?? '').replace(/^\s*\[\[figure:[a-zA-Z0-9_-]+\]\]\s*$/gmu, '');
   for (let pass = 0; pass < 6; pass += 1) {
     const previous = result;
     result = result
@@ -2952,6 +3088,7 @@ function collectState() {
       body: els.bodyInput.value,
       paragraphs: deepClone(paragraphRecords),
       chapters: serializeChapterModel(),
+      media: deepClone(mediaAssets),
       trailingBlankLines
     },
     paragraphOverrides: deepClone(paragraphOverrides),
@@ -3062,6 +3199,9 @@ function applyState(state) {
     paragraphRecords = deepClone(normalized.manuscript.paragraphs);
     trailingBlankLines = sanitizeBlankLineCount(normalized.manuscript.trailingBlankLines);
     paragraphOverrides = deepClone(normalized.paragraphOverrides);
+    mediaAssets = deepClone(normalized.manuscript.media || []);
+    selectedMediaId = null;
+    updateMediaUi();
     selectedParagraphId = null;
     selectedChapterIndex = -1;
     refreshChapterModelFromBody({ preserveSelection: false });
@@ -3163,6 +3303,7 @@ function normalizeState(raw) {
   manuscript.subtitle = String(manuscript.subtitle || '');
   manuscript.author = String(manuscript.author || '');
   manuscript.body = String(manuscript.body || '');
+  manuscript.media = normalizeMediaAssets(manuscriptSource.media);
   if (!manuscript.body && Array.isArray(manuscriptSource.chapters)) {
     manuscript.body = buildBodyFromChapters(manuscriptSource.chapters);
   }
@@ -3173,9 +3314,10 @@ function normalizeState(raw) {
         .filter((record) => record && typeof record.id === 'string')
         .map((record) => ({
           id: record.id,
-          type: record.type === 'heading' ? 'heading' : 'paragraph',
+          type: record.type === 'heading' ? 'heading' : record.type === 'figure' ? 'figure' : 'paragraph',
           level: record.type === 'heading' ? Math.min(3, Math.max(1, Number(record.level) || 1)) : null,
           text: String(record.text || ''),
+          mediaId: record.type === 'figure' ? String(record.mediaId || extractMediaIdFromMarker(record.text) || '') : null,
           blankLinesBefore: sanitizeBlankLineCount(record.blankLinesBefore)
         }))
     : [];
@@ -3183,7 +3325,7 @@ function normalizeState(raw) {
   manuscript.paragraphs = reconcileParagraphRecords(oldRecords, manuscript.body);
   manuscript.trailingBlankLines = parsedBody.trailingBlankLines;
   const validIds = new Set(
-    manuscript.paragraphs.filter((record) => record.type !== 'heading').map((record) => record.id)
+    manuscript.paragraphs.filter((record) => record.type === 'paragraph').map((record) => record.id)
   );
 
   const normalizedSettings = { ...base.settings, ...(source.settings || {}) };
@@ -3223,10 +3365,11 @@ function reconcileParagraphRecords(oldRecords, body) {
 
     if (sameOrder || !sameContents) {
       return incoming.map((record, index) => ({
-        id: old[index]?.id || createId(record.type === 'heading' ? 'heading' : 'paragraph'),
+        id: old[index]?.id || createId(record.type === 'heading' ? 'heading' : record.type === 'figure' ? 'figure' : 'paragraph'),
         type: record.type,
         level: record.type === 'heading' ? record.level : null,
         text: record.text,
+        mediaId: record.type === 'figure' ? record.mediaId : null,
         blankLinesBefore: record.blankLinesBefore
       }));
     }
@@ -3240,10 +3383,11 @@ function reconcileParagraphRecords(oldRecords, body) {
     return incoming.map((record) => {
       const queue = signatureQueues.get(signature(record)) || [];
       return {
-        id: queue.shift() || createId(record.type === 'heading' ? 'heading' : 'paragraph'),
+        id: queue.shift() || createId(record.type === 'heading' ? 'heading' : record.type === 'figure' ? 'figure' : 'paragraph'),
         type: record.type,
         level: record.type === 'heading' ? record.level : null,
         text: record.text,
+        mediaId: record.type === 'figure' ? record.mediaId : null,
         blankLinesBefore: record.blankLinesBefore
       };
     });
@@ -3295,7 +3439,7 @@ function reconcileParagraphRecords(oldRecords, body) {
       const incomingRecord = incoming[newGapStart + offset];
       const candidate = oldGap[offset];
       result[newGapStart + offset] = {
-        id: candidate?.id || createId(incomingRecord.type === 'heading' ? 'heading' : 'paragraph')
+        id: candidate?.id || createId(incomingRecord.type === 'heading' ? 'heading' : incomingRecord.type === 'figure' ? 'figure' : 'paragraph')
       };
     }
 
@@ -3306,14 +3450,15 @@ function reconcileParagraphRecords(oldRecords, body) {
 
   const usedIds = new Set();
   return incoming.map((record, index) => {
-    let id = result[index]?.id || createId(record.type === 'heading' ? 'heading' : 'paragraph');
-    if (usedIds.has(id)) id = createId(record.type === 'heading' ? 'heading' : 'paragraph');
+    let id = result[index]?.id || createId(record.type === 'heading' ? 'heading' : record.type === 'figure' ? 'figure' : 'paragraph');
+    if (usedIds.has(id)) id = createId(record.type === 'heading' ? 'heading' : record.type === 'figure' ? 'figure' : 'paragraph');
     usedIds.add(id);
     return {
       id,
       type: record.type,
       level: record.type === 'heading' ? record.level : null,
       text: record.text,
+      mediaId: record.type === 'figure' ? record.mediaId : null,
       blankLinesBefore: record.blankLinesBefore
     };
   });
@@ -3324,7 +3469,7 @@ function syncParagraphRecordsFromBody() {
   paragraphRecords = reconcileParagraphRecords(paragraphRecords, els.bodyInput.value);
   trailingBlankLines = parsedBody.trailingBlankLines;
   const validIds = new Set(
-    paragraphRecords.filter((record) => record.type !== 'heading').map((record) => record.id)
+    paragraphRecords.filter((record) => record.type === 'paragraph').map((record) => record.id)
   );
   paragraphOverrides = normalizeParagraphOverrides(paragraphOverrides, validIds);
   if (selectedParagraphId && !validIds.has(selectedParagraphId)) selectedParagraphId = null;
@@ -3475,7 +3620,7 @@ function createNewProject(requireConfirmation = true, saveExisting = true) {
 
   const blank = normalizeState({
     projectName: '新規組版データ',
-    manuscript: { title: '', subtitle: '', author: '', body: '', paragraphs: [], chapters: [] },
+    manuscript: { title: '', subtitle: '', author: '', body: '', paragraphs: [], chapters: [], media: [] },
     paragraphOverrides: {},
     settings: deepClone(DEFAULT_SETTINGS),
     metadata: {}
@@ -4037,6 +4182,314 @@ function refreshCurrentProjectStatus() {
 function updateCharCount() {
   const count = inlineMarkupToPlainText(els.bodyInput.value).replace(/\s/g, '').length;
   els.charCount.textContent = `${count.toLocaleString('ja-JP')}文字`;
+}
+
+function normalizeMediaAssets(raw) {
+  if (!Array.isArray(raw)) return [];
+  return raw.slice(0, MAX_MEDIA_ASSETS).map((asset) => ({
+    id: String(asset?.id || createId('media')),
+    fileName: String(asset?.fileName || '画像'),
+    mimeType: String(asset?.mimeType || 'image/webp'),
+    dataUrl: String(asset?.dataUrl || ''),
+    width: Math.max(1, Math.trunc(sanitizeNumber(asset?.width, 1))),
+    height: Math.max(1, Math.trunc(sanitizeNumber(asset?.height, 1))),
+    originalBytes: Math.max(0, Math.trunc(sanitizeNumber(asset?.originalBytes, 0))),
+    caption: String(asset?.caption || ''),
+    alt: String(asset?.alt || ''),
+    widthPercent: [25, 40, 50, 60, 75, 80, 100].includes(Number(asset?.widthPercent)) ? Number(asset.widthPercent) : 100,
+    align: ['left', 'center', 'right'].includes(asset?.align) ? asset.align : 'center',
+    pageBreakBefore: Boolean(asset?.pageBreakBefore),
+    spaceBefore: Math.max(0, sanitizeNumber(asset?.spaceBefore, 3)),
+    spaceAfter: Math.max(0, sanitizeNumber(asset?.spaceAfter, 3)),
+    createdAt: String(asset?.createdAt || new Date().toISOString())
+  })).filter((asset) => asset.dataUrl || asset.id);
+}
+
+function extractMediaIdFromMarker(value) {
+  const match = String(value || '').match(MEDIA_MARKER_PATTERN);
+  return match ? match[1] : '';
+}
+
+function mediaDataCharCount() {
+  return mediaAssets.reduce((total, asset) => total + String(asset.dataUrl || '').length, 0);
+}
+
+function updateMediaUi() {
+  const count = mediaAssets.length;
+  if (els.mediaCountBadge) els.mediaCountBadge.textContent = String(count);
+  if (!els.mediaStorageSummary || !els.mediaStorageProgress) return;
+  const chars = mediaDataCharCount();
+  const approximateBytes = Math.round(chars * .75);
+  els.mediaStorageSummary.textContent = `${formatBytes(approximateBytes)} / 約3.2 MB`;
+  const percent = Math.min(100, Math.round((chars / MAX_MEDIA_DATA_CHARS) * 100));
+  els.mediaStorageProgress.style.width = `${percent}%`;
+  els.mediaStorageProgress.style.background = percent >= 90 ? '#b04b4b' : percent >= 70 ? '#b17b36' : '#5277a6';
+}
+
+function openMediaManager(targetId = 'bodyInput', mediaId = null) {
+  mediaInsertTarget = targetId === 'chapterBodyInput' ? 'chapterBodyInput' : 'bodyInput';
+  selectedMediaId = mediaId || selectedMediaId;
+  els.mediaTargetNote.textContent = mediaInsertTarget === 'chapterBodyInput'
+    ? '現在選択中の章本文のカーソル位置へ挿入します。'
+    : '全文編集のカーソル位置へ挿入します。';
+  renderMediaLibrary();
+  updateMediaUi();
+  openModal('mediaModal');
+  if (selectedMediaId) {
+    requestAnimationFrame(() => els.mediaLibraryList.querySelector(`[data-media-card-id="${CSS.escape(selectedMediaId)}"]`)?.scrollIntoView({ block: 'center' }));
+  }
+}
+
+async function handleMediaFilesSelected(event) {
+  const files = Array.from(event.target.files || []);
+  event.target.value = '';
+  if (!files.length) return;
+  if (mediaAssets.length + files.length > MAX_MEDIA_ASSETS) {
+    showToast(`画像は1プロジェクト${MAX_MEDIA_ASSETS}点までです。`);
+    return;
+  }
+
+  for (const file of files) {
+    if (!/^image\/(jpeg|png|webp)$/i.test(file.type)) {
+      showToast(`「${file.name}」は対応していない形式です。`);
+      continue;
+    }
+    if (file.size > MAX_MEDIA_SOURCE_BYTES) {
+      showToast(`「${file.name}」は12MB以下にしてください。`);
+      continue;
+    }
+    try {
+      const optimized = await optimizeImageFile(file);
+      const nextChars = mediaDataCharCount() + optimized.dataUrl.length;
+      if (nextChars > MAX_MEDIA_DATA_CHARS) {
+        showToast('画像保存容量を超えるため追加できません。不要な画像を削除するか、画像を小さくしてください。');
+        continue;
+      }
+      const asset = {
+        id: createId('media'),
+        fileName: file.name,
+        mimeType: optimized.mimeType,
+        dataUrl: optimized.dataUrl,
+        width: optimized.width,
+        height: optimized.height,
+        originalBytes: file.size,
+        caption: '',
+        alt: file.name.replace(/\.[^.]+$/, ''),
+        widthPercent: 100,
+        align: 'center',
+        pageBreakBefore: false,
+        spaceBefore: 3,
+        spaceAfter: 3,
+        createdAt: new Date().toISOString()
+      };
+      mediaAssets.push(asset);
+      selectedMediaId = asset.id;
+    } catch (error) {
+      console.error(error);
+      showToast(`「${file.name}」を読み込めませんでした。`);
+    }
+  }
+  renderMediaLibrary();
+  updateMediaUi();
+  markDirty();
+  scheduleAutosave();
+}
+
+function optimizeImageFile(file) {
+  return new Promise((resolve, reject) => {
+    const objectUrl = URL.createObjectURL(file);
+    const image = new Image();
+    image.onload = () => {
+      try {
+        const maxDimension = 2000;
+        const ratio = Math.min(1, maxDimension / Math.max(image.naturalWidth, image.naturalHeight));
+        const width = Math.max(1, Math.round(image.naturalWidth * ratio));
+        const height = Math.max(1, Math.round(image.naturalHeight * ratio));
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const context = canvas.getContext('2d', { alpha: true });
+        context.imageSmoothingEnabled = true;
+        context.imageSmoothingQuality = 'high';
+        context.drawImage(image, 0, 0, width, height);
+        let dataUrl = canvas.toDataURL('image/webp', .88);
+        let mimeType = 'image/webp';
+        if (!dataUrl.startsWith('data:image/webp')) {
+          dataUrl = canvas.toDataURL('image/jpeg', .9);
+          mimeType = 'image/jpeg';
+        }
+        URL.revokeObjectURL(objectUrl);
+        resolve({ dataUrl, mimeType, width, height });
+      } catch (error) {
+        URL.revokeObjectURL(objectUrl);
+        reject(error);
+      }
+    };
+    image.onerror = () => { URL.revokeObjectURL(objectUrl); reject(new Error('image load failed')); };
+    image.src = objectUrl;
+  });
+}
+
+function renderMediaLibrary() {
+  els.mediaLibraryList.replaceChildren();
+  els.mediaEmptyState.hidden = mediaAssets.length > 0;
+  if (!mediaAssets.length) return;
+
+  mediaAssets.forEach((asset) => {
+    const card = document.createElement('article');
+    card.className = 'media-asset-card';
+    card.dataset.mediaCardId = asset.id;
+    card.classList.toggle('selected', asset.id === selectedMediaId);
+
+    const preview = document.createElement('div');
+    preview.className = 'media-asset-preview';
+    const img = document.createElement('img');
+    img.src = asset.dataUrl;
+    img.alt = asset.alt || asset.fileName;
+    preview.appendChild(img);
+
+    const fields = document.createElement('div');
+    fields.className = 'media-asset-fields';
+    const heading = document.createElement('div');
+    heading.className = 'media-asset-heading';
+    const headingCopy = document.createElement('div');
+    const name = document.createElement('strong');
+    name.textContent = asset.fileName;
+    const meta = document.createElement('small');
+    meta.textContent = `${asset.width} × ${asset.height}px ／ 元画像 ${formatBytes(asset.originalBytes)}`;
+    headingCopy.append(name, meta);
+    heading.appendChild(headingCopy);
+
+    const grid = document.createElement('div');
+    grid.className = 'media-form-grid';
+    grid.innerHTML = `
+      <label class="wide">キャプション<input data-media-field="caption" data-media-id="${escapeAttribute(asset.id)}" value="${escapeAttribute(asset.caption)}" placeholder="例：図1　全体構成"></label>
+      <label class="wide">代替テキスト<input data-media-field="alt" data-media-id="${escapeAttribute(asset.id)}" value="${escapeAttribute(asset.alt)}" placeholder="画像内容の説明"></label>
+      <label>表示幅<select data-media-field="widthPercent" data-media-id="${escapeAttribute(asset.id)}">
+        ${[25,40,50,60,75,80,100].map((value) => `<option value="${value}" ${value === asset.widthPercent ? 'selected' : ''}>${value}%</option>`).join('')}
+      </select></label>
+      <label>配置<select data-media-field="align" data-media-id="${escapeAttribute(asset.id)}">
+        <option value="left" ${asset.align === 'left' ? 'selected' : ''}>左寄せ</option>
+        <option value="center" ${asset.align === 'center' ? 'selected' : ''}>中央</option>
+        <option value="right" ${asset.align === 'right' ? 'selected' : ''}>右寄せ</option>
+      </select></label>
+      <label>前の余白<input data-media-field="spaceBefore" data-media-id="${escapeAttribute(asset.id)}" type="number" min="0" max="50" step="0.5" value="${asset.spaceBefore}"></label>
+      <label>後の余白<input data-media-field="spaceAfter" data-media-id="${escapeAttribute(asset.id)}" type="number" min="0" max="50" step="0.5" value="${asset.spaceAfter}"></label>
+      <label class="wide"><span><input data-media-field="pageBreakBefore" data-media-id="${escapeAttribute(asset.id)}" type="checkbox" ${asset.pageBreakBefore ? 'checked' : ''}> 画像の前で改ページ</span></label>`;
+
+    const actions = document.createElement('div');
+    actions.className = 'media-asset-actions';
+    const insert = document.createElement('button');
+    insert.type = 'button'; insert.className = 'button small media-insert-button';
+    insert.dataset.mediaAction = 'insert'; insert.dataset.mediaId = asset.id; insert.textContent = '本文へ挿入';
+    const locate = document.createElement('button');
+    locate.type = 'button'; locate.className = 'button small modal-secondary';
+    locate.dataset.mediaAction = 'locate'; locate.dataset.mediaId = asset.id; locate.textContent = '挿入位置を確認';
+    const remove = document.createElement('button');
+    remove.type = 'button'; remove.className = 'button small media-delete-button';
+    remove.dataset.mediaAction = 'delete'; remove.dataset.mediaId = asset.id; remove.textContent = '削除';
+    actions.append(insert, locate, remove);
+    fields.append(heading, grid, actions);
+    card.append(preview, fields);
+    els.mediaLibraryList.appendChild(card);
+  });
+}
+
+function handleMediaLibraryInput(event) {
+  const field = event.target.closest('[data-media-field]');
+  if (!field) return;
+  const asset = findMediaAsset(field.dataset.mediaId);
+  if (!asset) return;
+  const key = field.dataset.mediaField;
+  if (key === 'pageBreakBefore') asset[key] = field.checked;
+  else if (['widthPercent', 'spaceBefore', 'spaceAfter'].includes(key)) asset[key] = Number(field.value);
+  else asset[key] = field.value;
+  selectedMediaId = asset.id;
+  updateMediaUi();
+  markDirty();
+  scheduleRender();
+  scheduleAutosave();
+}
+
+function handleMediaLibraryClick(event) {
+  const button = event.target.closest('[data-media-action]');
+  if (!button) return;
+  const mediaId = button.dataset.mediaId;
+  if (button.dataset.mediaAction === 'insert') insertMediaMarker(mediaId);
+  if (button.dataset.mediaAction === 'locate') locateMediaMarker(mediaId);
+  if (button.dataset.mediaAction === 'delete') deleteMediaAsset(mediaId);
+}
+
+function insertMediaMarker(mediaId) {
+  const asset = findMediaAsset(mediaId);
+  const textarea = els[mediaInsertTarget] || els.bodyInput;
+  if (!asset || !textarea) return;
+  const marker = `[[figure:${mediaId}]]`;
+  const start = textarea.selectionStart ?? textarea.value.length;
+  const end = textarea.selectionEnd ?? start;
+  const before = textarea.value.slice(0, start);
+  const after = textarea.value.slice(end);
+  const prefix = before && !before.endsWith('\n') ? '\n\n' : before.endsWith('\n\n') || !before ? '' : '\n';
+  const suffix = after && !after.startsWith('\n') ? '\n\n' : after.startsWith('\n\n') || !after ? '' : '\n';
+  textarea.value = before + prefix + marker + suffix + after;
+  const cursor = (before + prefix + marker + suffix).length;
+  textarea.focus(); textarea.setSelectionRange(cursor, cursor);
+  textarea.dispatchEvent(new Event('input', { bubbles: true }));
+  selectedMediaId = mediaId;
+  closeModal('mediaModal');
+  showToast(`「${asset.fileName}」を本文へ挿入しました。`);
+}
+
+function locateMediaMarker(mediaId) {
+  const marker = `[[figure:${mediaId}]]`;
+  const fullIndex = els.bodyInput.value.indexOf(marker);
+  if (fullIndex < 0) {
+    showToast('この画像はまだ本文へ挿入されていません。');
+    return;
+  }
+  closeModal('mediaModal');
+  setManuscriptEditorMode('full', { focus: false });
+  els.bodyInput.focus();
+  els.bodyInput.setSelectionRange(fullIndex, fullIndex + marker.length);
+  requestAnimationFrame(() => els.bodyInput.scrollIntoView({ behavior: 'smooth', block: 'center' }));
+}
+
+function deleteMediaAsset(mediaId) {
+  const asset = findMediaAsset(mediaId);
+  if (!asset) return;
+  const marker = `[[figure:${mediaId}]]`;
+  const occurrences = els.bodyInput.value.split(marker).length - 1;
+  const message = occurrences
+    ? `「${asset.fileName}」を削除しますか？本文内の挿入位置${occurrences}件も削除されます。`
+    : `「${asset.fileName}」を削除しますか？`;
+  if (!window.confirm(message)) return;
+  mediaAssets = mediaAssets.filter((item) => item.id !== mediaId);
+  els.bodyInput.value = els.bodyInput.value.replace(new RegExp(`(?:\\n)?\\[\\[figure:${escapeRegExp(mediaId)}\\]\\](?:\\n)?`, 'g'), '\n');
+  syncParagraphRecordsFromBody();
+  refreshChapterModelFromBody({ preserveSelection: true });
+  if (manuscriptEditorMode === 'chapters') renderChapterManager();
+  selectedMediaId = null;
+  renderMediaLibrary();
+  updateMediaUi();
+  updateCharCount();
+  markDirty(); scheduleRender(); scheduleAutosave(); scheduleManuscriptCheck();
+  showToast('画像を削除しました。');
+}
+
+function formatBytes(bytes) {
+  const value = Math.max(0, Number(bytes) || 0);
+  if (value < 1024) return `${Math.round(value)} B`;
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(value < 10240 ? 1 : 0)} KB`;
+  return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function escapeAttribute(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function openModal(modalId) {
