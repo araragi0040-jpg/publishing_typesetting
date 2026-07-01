@@ -1,20 +1,20 @@
 'use strict';
 
-const APP_VERSION = 'v007';
-const SCHEMA_VERSION = 7;
+const APP_VERSION = 'v008';
+const SCHEMA_VERSION = 8;
 const AUTOSAVE_DELAY = 700;
 
-const PROJECT_INDEX_KEY = 'typesetting-app-v007-project-index';
-const PROJECT_PREFIX = 'typesetting-app-v007-project:';
-const CURRENT_PROJECT_KEY = 'typesetting-app-v007-current-project';
-const TEMPLATE_STORAGE_KEY = 'typesetting-app-v007-templates';
+const PROJECT_INDEX_KEY = 'typesetting-app-v008-project-index';
+const PROJECT_PREFIX = 'typesetting-app-v008-project:';
+const CURRENT_PROJECT_KEY = 'typesetting-app-v008-current-project';
+const TEMPLATE_STORAGE_KEY = 'typesetting-app-v008-templates';
 
-const LEGACY_V6_PROJECT_INDEX_KEY = 'typesetting-app-v006-project-index';
-const LEGACY_V6_PROJECT_PREFIX = 'typesetting-app-v006-project:';
-const LEGACY_V6_CURRENT_PROJECT_KEY = 'typesetting-app-v006-current-project';
-const LEGACY_V6_TEMPLATE_STORAGE_KEY = 'typesetting-app-v006-templates';
+const LEGACY_V7_PROJECT_INDEX_KEY = 'typesetting-app-v007-project-index';
+const LEGACY_V7_PROJECT_PREFIX = 'typesetting-app-v007-project:';
+const LEGACY_V7_CURRENT_PROJECT_KEY = 'typesetting-app-v007-current-project';
+const LEGACY_V7_TEMPLATE_STORAGE_KEY = 'typesetting-app-v007-templates';
 const LEGACY_V1_STORAGE_KEY = 'typesetting-app-v001';
-const MIGRATION_MARKER_KEY = 'typesetting-app-v007-migration-complete';
+const MIGRATION_MARKER_KEY = 'typesetting-app-v008-migration-complete';
 
 const DEFAULT_SETTINGS = Object.freeze({
   paperPreset: 'A5',
@@ -80,32 +80,32 @@ const DEFAULT_SETTINGS = Object.freeze({
 
 const SAMPLE_MANUSCRIPT = Object.freeze({
   title: 'サンプルタイトル',
-  subtitle: '見出し・字下げ・空行保持の確認用原稿',
+  subtitle: '章管理と全文編集の確認用原稿',
   author: '著者名',
-  body: `# 第1章　組版アプリv007
+  body: `# 第1章　組版アプリv008
 
-これは、組版アプリv007の動作確認用原稿です。
+これは、組版アプリv008の動作確認用原稿です。
 
 右側の設定を変更すると、用紙サイズ、余白、フォント、文字サイズ、文字間、行間が中央のプレビューへ自動反映されます。
 
-## 見出しの入力方法
+## 全文編集と章別編集
 
-本文内で行頭に「# 」「## 」「### 」を付けると、大見出し・中見出し・小見出しとして自動認識します。見出し記号と文字の間には半角スペースを入れてください。
+既存のWord原稿などは「全文編集」にまとめて貼り付けられます。行頭に「# 」を付けた大見出しは章タイトルとして認識されます。
 
-### 段落単位の調整
+### 迷わない編集方法
 
-中央プレビューの本文段落をクリックすると、その段落だけ文字サイズ、行間、文字間、揃え、字下げ、前後余白などを調整できます。
+「章別編集」へ切り替えると、第1章、第2章のように章ごとの一覧から選んで編集できます。どちらで変更しても、もう一方へ自動反映されます。
 
 # 第2章　保存と出力
 
-強制改ページや「次の段落と同じページに置く」設定にも対応しています。個別設定を解除すると、本文全体の組版設定へ戻ります。
+章の追加、複製、削除、並び替えにも対応しています。JSON出力はバックアップや別端末への移動に使用してください。
 
-JSON出力は、バックアップや別端末への移動に使用してください。PDFとして保存する際は、右上の「PDF出力」を押し、ブラウザの印刷画面で余白なし、倍率100%を推奨します。`
+PDFとして保存する際は、右上の「PDF出力」を押し、ブラウザの印刷画面で余白なし、倍率100%を推奨します。`
 });
 
 const DEFAULT_STATE = Object.freeze({
-  projectName: '組版アプリ v007 サンプル',
-  manuscript: { ...SAMPLE_MANUSCRIPT, paragraphs: [] },
+  projectName: '組版アプリ v008 サンプル',
+  manuscript: { ...SAMPLE_MANUSCRIPT, paragraphs: [], chapters: [] },
   paragraphOverrides: {},
   settings: DEFAULT_SETTINGS,
   metadata: {
@@ -169,6 +169,11 @@ let paragraphRecords = [];
 let trailingBlankLines = 0;
 let paragraphOverrides = {};
 let selectedParagraphId = null;
+let manuscriptEditorMode = 'full';
+let chapterModel = [];
+let selectedChapterIndex = -1;
+let isApplyingChapterEdit = false;
+const MANUSCRIPT_MODE_KEY = 'typesetting-app-v008-manuscript-mode';
 
 window.addEventListener('DOMContentLoaded', init);
 
@@ -176,6 +181,9 @@ function init() {
   cacheElements();
   bindEvents();
   loadInitialProject();
+  restoreManuscriptEditorMode();
+  refreshChapterModelFromBody({ preserveSelection: false });
+  renderChapterManager();
   updateCharCount();
   applyViewSettings();
   updateBlankLineControls();
@@ -211,7 +219,13 @@ function cacheElements() {
     'heading2FontFamily', 'heading2Size', 'heading2Align', 'heading2SpaceBefore',
     'heading2SpaceAfter', 'heading2PageBreakBefore', 'heading2KeepWithNext',
     'heading3FontFamily', 'heading3Size', 'heading3Align', 'heading3SpaceBefore',
-    'heading3SpaceAfter', 'heading3PageBreakBefore', 'heading3KeepWithNext'
+    'heading3SpaceAfter', 'heading3PageBreakBefore', 'heading3KeepWithNext',
+    'manuscriptModeFull', 'manuscriptModeChapters', 'fullEditorView', 'chapterEditorView',
+    'editorModeGuidance', 'insertHeading1Btn', 'insertHeading2Btn', 'insertHeading3Btn',
+    'chapterSummary', 'chapterList', 'addChapterBtn', 'addFirstChapterBtn', 'chapterEditCard',
+    'selectedChapterLabel', 'selectedChapterMeta', 'chapterEmptyState', 'chapterControls',
+    'chapterTitleInput', 'chapterBodyInput', 'chapterMoveUpBtn', 'chapterMoveDownBtn',
+    'duplicateChapterBtn', 'deleteChapterBtn'
   ];
 
   ids.forEach((id) => {
@@ -250,12 +264,29 @@ function bindEvents() {
   els.bodyInput.addEventListener('input', () => {
     if (isApplyingState) return;
     syncParagraphRecordsFromBody();
+    refreshChapterModelFromBody({ preserveSelection: true });
+    if (manuscriptEditorMode === 'chapters') renderChapterManager();
     updateCharCount();
     updateParagraphControls();
     markDirty();
     scheduleRender();
     scheduleAutosave();
   });
+
+  els.manuscriptModeFull.addEventListener('click', () => setManuscriptEditorMode('full'));
+  els.manuscriptModeChapters.addEventListener('click', () => setManuscriptEditorMode('chapters'));
+  els.insertHeading1Btn.addEventListener('click', () => applyHeadingToCurrentLines(1));
+  els.insertHeading2Btn.addEventListener('click', () => applyHeadingToCurrentLines(2));
+  els.insertHeading3Btn.addEventListener('click', () => applyHeadingToCurrentLines(3));
+  els.chapterList.addEventListener('click', handleChapterListClick);
+  els.addChapterBtn.addEventListener('click', addChapter);
+  els.addFirstChapterBtn.addEventListener('click', addChapter);
+  els.chapterTitleInput.addEventListener('input', handleChapterEditorInput);
+  els.chapterBodyInput.addEventListener('input', handleChapterEditorInput);
+  els.chapterMoveUpBtn.addEventListener('click', () => moveSelectedChapter(-1));
+  els.chapterMoveDownBtn.addEventListener('click', () => moveSelectedChapter(1));
+  els.duplicateChapterBtn.addEventListener('click', duplicateSelectedChapter);
+  els.deleteChapterBtn.addEventListener('click', deleteSelectedChapter);
 
   els.paperPreset.addEventListener('change', handlePresetChange);
   els.viewMode.addEventListener('change', handleViewSettingChange);
@@ -370,7 +401,7 @@ function loadInitialProject() {
     applyState(migrated);
     saveCurrentProject(false);
     updateSaveStatus('v001データを移行済み');
-    showToast('v001の保存データをv007へ移行しました。');
+    showToast('v001の保存データをv008へ移行しました。');
     return;
   }
 
@@ -390,15 +421,15 @@ function migrateLegacyData() {
     return;
   }
 
-  const legacyIndex = readJsonFromStorage(LEGACY_V6_PROJECT_INDEX_KEY, []);
+  const legacyIndex = readJsonFromStorage(LEGACY_V7_PROJECT_INDEX_KEY, []);
   let migratedCount = 0;
   let mappedCurrentId = null;
-  const legacyCurrentId = safeStorageGet(LEGACY_V6_CURRENT_PROJECT_KEY);
+  const legacyCurrentId = safeStorageGet(LEGACY_V7_CURRENT_PROJECT_KEY);
 
   if (Array.isArray(legacyIndex)) {
     legacyIndex.forEach((item) => {
       if (!item?.id) return;
-      const raw = readJsonFromStorage(`${LEGACY_V6_PROJECT_PREFIX}${item.id}`, null);
+      const raw = readJsonFromStorage(`${LEGACY_V7_PROJECT_PREFIX}${item.id}`, null);
       if (!raw) return;
       const state = normalizeState(raw);
       state.metadata.appVersion = APP_VERSION;
@@ -412,7 +443,7 @@ function migrateLegacyData() {
     });
   }
 
-  const legacyTemplates = readJsonFromStorage(LEGACY_V6_TEMPLATE_STORAGE_KEY, []);
+  const legacyTemplates = readJsonFromStorage(LEGACY_V7_TEMPLATE_STORAGE_KEY, []);
   if (Array.isArray(legacyTemplates) && legacyTemplates.length) {
     safeStorageSet(TEMPLATE_STORAGE_KEY, JSON.stringify(legacyTemplates));
   }
@@ -421,9 +452,384 @@ function migrateLegacyData() {
   safeStorageSet(MIGRATION_MARKER_KEY, 'true');
 
   if (migratedCount > 0) {
-    showToast(`v006のプロジェクト${migratedCount}件をv007へ移行しました。`);
+    showToast(`v007のプロジェクト${migratedCount}件をv008へ移行しました。`);
   }
 }
+
+function restoreManuscriptEditorMode() {
+  const stored = safeStorageGet(MANUSCRIPT_MODE_KEY);
+  setManuscriptEditorMode(stored === 'chapters' ? 'chapters' : 'full', {
+    save: false,
+    refresh: false,
+    focus: false
+  });
+}
+
+function setManuscriptEditorMode(mode, options = {}) {
+  const nextMode = mode === 'chapters' ? 'chapters' : 'full';
+  manuscriptEditorMode = nextMode;
+
+  const chapterMode = nextMode === 'chapters';
+  els.fullEditorView.hidden = chapterMode;
+  els.chapterEditorView.hidden = !chapterMode;
+  els.manuscriptModeFull.classList.toggle('active', !chapterMode);
+  els.manuscriptModeChapters.classList.toggle('active', chapterMode);
+  els.manuscriptModeFull.setAttribute('aria-selected', String(!chapterMode));
+  els.manuscriptModeChapters.setAttribute('aria-selected', String(chapterMode));
+  els.editorModeGuidance.innerHTML = chapterMode
+    ? '<strong>おすすめ：</strong>章の追加・並び替え・個別編集をしたい場合はこちらが便利です。'
+    : '<strong>おすすめ：</strong>Wordなどの原稿がある場合は、全文編集へそのまま貼り付けてください。';
+
+  if (chapterMode && options.refresh !== false) {
+    refreshChapterModelFromBody({ preserveSelection: true });
+    renderChapterManager();
+  }
+
+  if (options.save !== false) safeStorageSet(MANUSCRIPT_MODE_KEY, nextMode);
+  if (options.focus && chapterMode && chapterModel.length) els.chapterTitleInput.focus();
+  if (options.focus && !chapterMode) els.bodyInput.focus();
+}
+
+function isBlankTextLine(line) {
+  return /^[\t \u3000]*$/.test(String(line || ''));
+}
+
+function trimBoundaryBlankLines(lines) {
+  const copy = [...lines];
+  while (copy.length && isBlankTextLine(copy[0])) copy.shift();
+  while (copy.length && isBlankTextLine(copy[copy.length - 1])) copy.pop();
+  return copy;
+}
+
+function parseChaptersFromBody(text) {
+  const normalized = normalizeBodyText(text);
+  if (!normalized) return [];
+
+  const lines = normalized.split('\n');
+  const chapters = [];
+  let current = { type: 'preface', title: '', lines: [] };
+
+  const pushCurrent = () => {
+    const bodyLines = trimBoundaryBlankLines(current.lines);
+    const body = bodyLines.join('\n');
+    const shouldKeep = current.type === 'chapter' || body.length > 0;
+    if (shouldKeep) {
+      chapters.push({
+        type: current.type,
+        title: current.type === 'chapter' ? String(current.title || '') : '',
+        body
+      });
+    }
+  };
+
+  lines.forEach((line) => {
+    const match = line.match(/^[\t \u3000]*#[\t \u3000]+(.+?)[\t \u3000]*$/);
+    if (match) {
+      pushCurrent();
+      current = { type: 'chapter', title: match[1], lines: [] };
+      return;
+    }
+    current.lines.push(line);
+  });
+
+  pushCurrent();
+  return chapters;
+}
+
+function serializeChapterModel() {
+  return chapterModel.map((chapter) => ({
+    type: chapter.type === 'preface' ? 'preface' : 'chapter',
+    title: chapter.type === 'preface' ? '' : String(chapter.title || ''),
+    body: String(chapter.body || '')
+  }));
+}
+
+function buildBodyFromChapters(chapters) {
+  return (Array.isArray(chapters) ? chapters : [])
+    .map((chapter) => {
+      const body = normalizeBodyText(chapter.body || '').replace(/^\n+|\n+$/g, '');
+      if (chapter.type === 'preface') return body;
+      const title = String(chapter.title || '').trim() || '無題の章';
+      return body ? `# ${title}\n\n${body}` : `# ${title}`;
+    })
+    .filter((part) => part !== '')
+    .join('\n\n');
+}
+
+function refreshChapterModelFromBody(options = {}) {
+  const previous = chapterModel[selectedChapterIndex] || null;
+  const previousIndex = selectedChapterIndex;
+  const parsed = parseChaptersFromBody(els.bodyInput.value);
+  chapterModel = parsed;
+
+  if (!chapterModel.length) {
+    selectedChapterIndex = -1;
+    return;
+  }
+
+  if (options.preserveSelection !== false && previous) {
+    const exactIndex = chapterModel.findIndex((item) => (
+      item.type === previous.type
+      && item.title === previous.title
+      && item.body === previous.body
+    ));
+    if (exactIndex >= 0) {
+      selectedChapterIndex = exactIndex;
+      return;
+    }
+    selectedChapterIndex = Math.min(Math.max(previousIndex, 0), chapterModel.length - 1);
+    return;
+  }
+
+  selectedChapterIndex = Math.min(Math.max(selectedChapterIndex, 0), chapterModel.length - 1);
+}
+
+function renderChapterManager() {
+  renderChapterList();
+  renderSelectedChapterEditor(true);
+}
+
+function renderChapterList() {
+  els.chapterList.replaceChildren();
+  const chapterCount = chapterModel.filter((item) => item.type === 'chapter').length;
+  const hasPreface = chapterModel.some((item) => item.type === 'preface');
+  els.chapterSummary.textContent = `${chapterCount}章${hasPreface ? '・冒頭あり' : ''}`;
+
+  if (!chapterModel.length) {
+    const empty = document.createElement('div');
+    empty.className = 'chapter-list-empty';
+    empty.textContent = '章はまだありません。全文編集で「# 章タイトル」を入力するか、章を追加してください。';
+    els.chapterList.appendChild(empty);
+    return;
+  }
+
+  let chapterNumber = 0;
+  chapterModel.forEach((chapter, index) => {
+    if (chapter.type === 'chapter') chapterNumber += 1;
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'chapter-list-item';
+    button.dataset.chapterIndex = String(index);
+    button.classList.toggle('active', index === selectedChapterIndex);
+
+    const main = document.createElement('span');
+    main.className = 'chapter-list-item-main';
+    const number = document.createElement('span');
+    number.className = 'chapter-number';
+    number.textContent = chapter.type === 'preface' ? '前' : String(chapterNumber);
+
+    const copy = document.createElement('span');
+    copy.className = 'chapter-list-copy';
+    const title = document.createElement('span');
+    title.className = 'chapter-list-title';
+    title.textContent = chapter.type === 'preface' ? '冒頭部分' : (chapter.title || '無題の章');
+    if (chapter.type === 'preface') {
+      const badge = document.createElement('span');
+      badge.className = 'chapter-preface-badge';
+      badge.textContent = '章タイトルなし';
+      title.appendChild(badge);
+    }
+    const meta = document.createElement('span');
+    meta.className = 'chapter-list-meta';
+    const bodyLength = String(chapter.body || '').length;
+    const subheadingCount = extractChapterSubheadings(chapter.body).length;
+    meta.textContent = `${bodyLength.toLocaleString('ja-JP')}文字${subheadingCount ? `・小見出し${subheadingCount}件` : ''}`;
+    copy.append(title, meta);
+    main.append(number, copy);
+    button.appendChild(main);
+
+    const subheadings = extractChapterSubheadings(chapter.body).slice(0, 3);
+    if (subheadings.length) {
+      const summary = document.createElement('div');
+      summary.className = 'chapter-subheadings';
+      summary.textContent = subheadings.map((item) => `${item.level === 2 ? '└' : '　└'} ${item.text}`).join('　');
+      button.appendChild(summary);
+    }
+
+    els.chapterList.appendChild(button);
+  });
+}
+
+function extractChapterSubheadings(body) {
+  return normalizeBodyText(body || '')
+    .split('\n')
+    .map((line) => {
+      const match = line.match(/^[\t \u3000]*(#{2,3})[\t \u3000]+(.+?)[\t \u3000]*$/);
+      return match ? { level: match[1].length, text: match[2] } : null;
+    })
+    .filter(Boolean);
+}
+
+function renderSelectedChapterEditor(populateFields = true) {
+  const item = chapterModel[selectedChapterIndex] || null;
+  const hasItem = Boolean(item);
+  els.chapterEmptyState.hidden = hasItem;
+  els.chapterControls.hidden = !hasItem;
+
+  if (!hasItem) {
+    els.selectedChapterLabel.textContent = '章を選択してください';
+    els.selectedChapterMeta.textContent = '';
+    els.chapterMoveUpBtn.disabled = true;
+    els.chapterMoveDownBtn.disabled = true;
+    return;
+  }
+
+  const chapterItemsBefore = chapterModel.slice(0, selectedChapterIndex + 1)
+    .filter((chapter) => chapter.type === 'chapter').length;
+  const chapterCount = chapterModel.filter((chapter) => chapter.type === 'chapter').length;
+  const isPreface = item.type === 'preface';
+  els.selectedChapterLabel.textContent = isPreface
+    ? '冒頭部分'
+    : (item.title || `第${chapterItemsBefore}章（無題）`);
+  els.selectedChapterMeta.textContent = isPreface
+    ? `${String(item.body || '').length.toLocaleString('ja-JP')}文字・章タイトルの前にある文章`
+    : `${chapterItemsBefore}/${chapterCount}章・${String(item.body || '').length.toLocaleString('ja-JP')}文字`;
+
+  if (populateFields) {
+    isApplyingChapterEdit = true;
+    els.chapterTitleInput.value = isPreface ? '冒頭部分（章タイトルなし）' : item.title;
+    els.chapterTitleInput.disabled = isPreface;
+    els.chapterBodyInput.value = item.body;
+    isApplyingChapterEdit = false;
+  }
+
+  const firstMovableIndex = chapterModel[0]?.type === 'preface' ? 1 : 0;
+  els.chapterMoveUpBtn.disabled = isPreface || selectedChapterIndex <= firstMovableIndex;
+  els.chapterMoveDownBtn.disabled = isPreface || selectedChapterIndex >= chapterModel.length - 1;
+  els.duplicateChapterBtn.disabled = isPreface;
+  els.deleteChapterBtn.textContent = isPreface ? '冒頭部分を削除' : '章を削除';
+}
+
+function handleChapterListClick(event) {
+  const button = event.target.closest('[data-chapter-index]');
+  if (!button) return;
+  const index = Number(button.dataset.chapterIndex);
+  if (!Number.isInteger(index) || !chapterModel[index]) return;
+  selectedChapterIndex = index;
+  renderChapterManager();
+  els.chapterTitleInput.focus();
+}
+
+function normalizeChapterBodyHeadings(value) {
+  return normalizeBodyText(value).replace(/^([\t \u3000]*)#[\t \u3000]+(.+)$/gm, '$1## $2');
+}
+
+function handleChapterEditorInput() {
+  if (isApplyingChapterEdit || isApplyingState) return;
+  const item = chapterModel[selectedChapterIndex];
+  if (!item) return;
+
+  if (item.type === 'chapter') item.title = els.chapterTitleInput.value;
+  const normalizedBody = normalizeChapterBodyHeadings(els.chapterBodyInput.value);
+  if (normalizedBody !== els.chapterBodyInput.value) {
+    const selectionStart = els.chapterBodyInput.selectionStart;
+    els.chapterBodyInput.value = normalizedBody;
+    els.chapterBodyInput.setSelectionRange(selectionStart + 1, selectionStart + 1);
+    showToast('章本文内の大見出し「#」を中見出し「##」へ変更しました。');
+  }
+  item.body = els.chapterBodyInput.value;
+
+  syncBodyFromChapterModel();
+  renderChapterList();
+  renderSelectedChapterEditor(false);
+}
+
+function syncBodyFromChapterModel() {
+  els.bodyInput.value = buildBodyFromChapters(chapterModel);
+  syncParagraphRecordsFromBody();
+  updateCharCount();
+  updateParagraphControls();
+  markDirty();
+  scheduleRender();
+  scheduleAutosave();
+}
+
+function addChapter() {
+  refreshChapterModelFromBody({ preserveSelection: true });
+  const chapterCount = chapterModel.filter((item) => item.type === 'chapter').length;
+  const newChapter = {
+    type: 'chapter',
+    title: `第${chapterCount + 1}章　新しい章`,
+    body: ''
+  };
+  let insertIndex = chapterModel.length;
+  if (selectedChapterIndex >= 0) insertIndex = selectedChapterIndex + 1;
+  chapterModel.splice(insertIndex, 0, newChapter);
+  selectedChapterIndex = insertIndex;
+  syncBodyFromChapterModel();
+  setManuscriptEditorMode('chapters', { refresh: false, save: true });
+  renderChapterManager();
+  els.chapterTitleInput.focus();
+  els.chapterTitleInput.select();
+  showToast('新しい章を追加しました。');
+}
+
+function duplicateSelectedChapter() {
+  const item = chapterModel[selectedChapterIndex];
+  if (!item || item.type === 'preface') return;
+  const copy = {
+    type: 'chapter',
+    title: `${item.title || '無題の章'}（コピー）`,
+    body: item.body
+  };
+  chapterModel.splice(selectedChapterIndex + 1, 0, copy);
+  selectedChapterIndex += 1;
+  syncBodyFromChapterModel();
+  renderChapterManager();
+  showToast('選択中の章を複製しました。');
+}
+
+function deleteSelectedChapter() {
+  const item = chapterModel[selectedChapterIndex];
+  if (!item) return;
+  const label = item.type === 'preface' ? '冒頭部分' : `「${item.title || '無題の章'}」`;
+  if (!window.confirm(`${label}を削除しますか？\nこの操作は元に戻せません。`)) return;
+
+  chapterModel.splice(selectedChapterIndex, 1);
+  selectedChapterIndex = chapterModel.length
+    ? Math.min(selectedChapterIndex, chapterModel.length - 1)
+    : -1;
+  syncBodyFromChapterModel();
+  renderChapterManager();
+  showToast(`${label}を削除しました。`);
+}
+
+function moveSelectedChapter(direction) {
+  const item = chapterModel[selectedChapterIndex];
+  if (!item || item.type === 'preface') return;
+  const target = selectedChapterIndex + direction;
+  const firstMovableIndex = chapterModel[0]?.type === 'preface' ? 1 : 0;
+  if (target < firstMovableIndex || target >= chapterModel.length) return;
+
+  [chapterModel[selectedChapterIndex], chapterModel[target]] = [chapterModel[target], chapterModel[selectedChapterIndex]];
+  selectedChapterIndex = target;
+  syncBodyFromChapterModel();
+  renderChapterManager();
+  showToast('章の順番を変更しました。');
+}
+
+function applyHeadingToCurrentLines(level) {
+  const textarea = els.bodyInput;
+  const prefix = `${'#'.repeat(Math.min(3, Math.max(1, level)))} `;
+  const value = textarea.value;
+  const selectionStart = textarea.selectionStart;
+  const selectionEnd = textarea.selectionEnd;
+  const lineStart = value.lastIndexOf('\n', Math.max(0, selectionStart - 1)) + 1;
+  const nextBreak = value.indexOf('\n', selectionEnd);
+  const lineEnd = nextBreak === -1 ? value.length : nextBreak;
+  const selectedLines = value.slice(lineStart, lineEnd).split('\n');
+  const replacement = selectedLines.map((line) => {
+    if (!line.trim()) return prefix;
+    return `${prefix}${line.replace(/^[\t \u3000]*#{1,3}[\t \u3000]*/, '')}`;
+  }).join('\n');
+
+  textarea.value = value.slice(0, lineStart) + replacement + value.slice(lineEnd);
+  textarea.focus();
+  textarea.setSelectionRange(lineStart, lineStart + replacement.length);
+  textarea.dispatchEvent(new Event('input', { bubbles: true }));
+  showToast(`${level === 1 ? '大' : level === 2 ? '中' : '小'}見出しに設定しました。`);
+}
+
 
 function updateBlankLineControls() {
   if (!els.blankLineScale || !els.preserveBlankLines) return;
@@ -448,11 +854,11 @@ function saveSettingsAccordionState() {
     const key = details.id || `section-${index}`;
     state[key] = details.open;
   });
-  safeStorageSet('typesetting-app-v007-settings-ui', JSON.stringify(state));
+  safeStorageSet('typesetting-app-v008-settings-ui', JSON.stringify(state));
 }
 
 function restoreSettingsAccordions() {
-  const state = readJsonFromStorage('typesetting-app-v007-settings-ui', null);
+  const state = readJsonFromStorage('typesetting-app-v008-settings-ui', null);
   if (!state || typeof state !== 'object') return;
   document.querySelectorAll('.settings-accordion').forEach((details, index) => {
     const key = details.id || `section-${index}`;
@@ -1230,6 +1636,7 @@ function collectState() {
       author: els.authorInput.value,
       body: els.bodyInput.value,
       paragraphs: deepClone(paragraphRecords),
+      chapters: serializeChapterModel(),
       trailingBlankLines
     },
     paragraphOverrides: deepClone(paragraphOverrides),
@@ -1322,6 +1729,9 @@ function applyState(state) {
     trailingBlankLines = sanitizeBlankLineCount(normalized.manuscript.trailingBlankLines);
     paragraphOverrides = deepClone(normalized.paragraphOverrides);
     selectedParagraphId = null;
+    selectedChapterIndex = -1;
+    refreshChapterModelFromBody({ preserveSelection: false });
+    renderChapterManager();
     applySettingsToInputs(normalized.settings);
     updateCharCount();
     updateParagraphControls();
@@ -1398,6 +1808,10 @@ function normalizeState(raw) {
   manuscript.subtitle = String(manuscript.subtitle || '');
   manuscript.author = String(manuscript.author || '');
   manuscript.body = String(manuscript.body || '');
+  if (!manuscript.body && Array.isArray(manuscriptSource.chapters)) {
+    manuscript.body = buildBodyFromChapters(manuscriptSource.chapters);
+  }
+  manuscript.chapters = parseChaptersFromBody(manuscript.body);
 
   const oldRecords = Array.isArray(manuscriptSource.paragraphs)
     ? manuscriptSource.paragraphs
@@ -1446,13 +1860,38 @@ function reconcileParagraphRecords(oldRecords, body) {
   const signature = (record) => `${record.type || 'paragraph'}:${record.level || 0}:${String(record.text || '')}`;
 
   if (incoming.length === old.length) {
-    return incoming.map((record, index) => ({
-      id: old[index]?.id || createId(record.type === 'heading' ? 'heading' : 'paragraph'),
-      type: record.type,
-      level: record.type === 'heading' ? record.level : null,
-      text: record.text,
-      blankLinesBefore: record.blankLinesBefore
-    }));
+    const oldSignaturesForOrder = old.map(signature);
+    const newSignaturesForOrder = incoming.map(signature);
+    const sameOrder = oldSignaturesForOrder.every((value, index) => value === newSignaturesForOrder[index]);
+    const sameContents = [...oldSignaturesForOrder].sort().join('\u0001')
+      === [...newSignaturesForOrder].sort().join('\u0001');
+
+    if (sameOrder || !sameContents) {
+      return incoming.map((record, index) => ({
+        id: old[index]?.id || createId(record.type === 'heading' ? 'heading' : 'paragraph'),
+        type: record.type,
+        level: record.type === 'heading' ? record.level : null,
+        text: record.text,
+        blankLinesBefore: record.blankLinesBefore
+      }));
+    }
+
+    const signatureQueues = new Map();
+    old.forEach((record) => {
+      const key = signature(record);
+      if (!signatureQueues.has(key)) signatureQueues.set(key, []);
+      signatureQueues.get(key).push(record.id);
+    });
+    return incoming.map((record) => {
+      const queue = signatureQueues.get(signature(record)) || [];
+      return {
+        id: queue.shift() || createId(record.type === 'heading' ? 'heading' : 'paragraph'),
+        type: record.type,
+        level: record.type === 'heading' ? record.level : null,
+        text: record.text,
+        blankLinesBefore: record.blankLinesBefore
+      };
+    });
   }
 
   if (!old.length) return createParagraphRecords(body);
@@ -1681,7 +2120,7 @@ function createNewProject(requireConfirmation = true, saveExisting = true) {
 
   const blank = normalizeState({
     projectName: '新規組版データ',
-    manuscript: { title: '', subtitle: '', author: '', body: '', paragraphs: [] },
+    manuscript: { title: '', subtitle: '', author: '', body: '', paragraphs: [], chapters: [] },
     paragraphOverrides: {},
     settings: deepClone(DEFAULT_SETTINGS),
     metadata: {}

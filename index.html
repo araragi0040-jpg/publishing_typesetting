@@ -4,8 +4,8 @@
 <head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1" name="viewport"/>
-<meta content="出版社向け簡易組版アプリ v007" name="description"/>
-<title>組版アプリ v007</title>
+<meta content="出版社向け簡易組版アプリ v008" name="description"/>
+<title>組版アプリ v008</title>
 <link href="styles.css" rel="stylesheet"/>
 </head>
 <body>
@@ -13,7 +13,7 @@
 <header class="topbar">
 <div class="brand-block">
 <strong>組版アプリ</strong>
-<span class="version-badge">v007</span>
+<span class="version-badge">v008</span>
 </div>
 <label class="project-name-wrap">
 <span>プロジェクト名</span>
@@ -33,50 +33,144 @@
 </header>
 <main class="workspace">
 <section aria-labelledby="manuscriptTitle" class="panel manuscript-panel">
-<div class="panel-header">
-<div>
-<p class="eyebrow">MANUSCRIPT</p>
-<h1 id="manuscriptTitle">原稿入力</h1>
-</div>
-<span class="count-badge" id="charCount">0文字</span>
-</div>
-<div class="panel-scroll">
-<label class="field">
-<span>タイトル</span>
-<input id="titleInput" placeholder="書名・記事タイトル" type="text" value="サンプルタイトル"/>
-</label>
-<label class="field">
-<span>サブタイトル</span>
-<input id="subtitleInput" placeholder="不要な場合は空欄" type="text" value="見出し・字下げ・空行保持の確認用原稿"/>
-</label>
-<label class="field">
-<span>著者名</span>
-<input id="authorInput" placeholder="不要な場合は空欄" type="text" value="著者名"/>
-</label>
-<label class="field body-field">
-<span>本文</span>
-<textarea id="bodyInput" placeholder="ここに本文を貼り付けてください。" spellcheck="false"># 第1章　組版アプリv007
+  <div class="panel-header manuscript-header">
+    <div>
+      <p class="eyebrow">MANUSCRIPT</p>
+      <h1 id="manuscriptTitle">原稿編集</h1>
+    </div>
+    <span class="count-badge" id="charCount">0文字</span>
+  </div>
 
-これは、組版アプリv007の動作確認用原稿です。
+  <div class="manuscript-scroll">
+    <section class="document-info-card" aria-label="書籍情報">
+      <div class="section-label-row">
+        <strong>書籍情報</strong>
+        <span>表紙・ヘッダーに使用</span>
+      </div>
+      <label class="field compact-gap">
+        <span>タイトル</span>
+        <input id="titleInput" placeholder="書名・記事タイトル" type="text" value="サンプルタイトル"/>
+      </label>
+      <label class="field compact-gap">
+        <span>サブタイトル</span>
+        <input id="subtitleInput" placeholder="不要な場合は空欄" type="text" value="章管理と全文編集の確認用原稿"/>
+      </label>
+      <label class="field compact-gap no-margin">
+        <span>著者名</span>
+        <input id="authorInput" placeholder="不要な場合は空欄" type="text" value="著者名"/>
+      </label>
+    </section>
+
+    <div class="editor-mode-card">
+      <div class="section-label-row mode-label-row">
+        <div>
+          <strong>原稿の編集方法</strong>
+          <span>作業に合う方を選べます</span>
+        </div>
+        <span class="sync-badge">常に自動同期</span>
+      </div>
+      <div class="segmented-control" role="tablist" aria-label="原稿編集方法">
+        <button class="segment-button active" id="manuscriptModeFull" type="button" role="tab" aria-selected="true" aria-controls="fullEditorView">
+          <span class="segment-icon">全文</span>
+          <span><strong>全文編集</strong><small>既存原稿をまとめて貼る</small></span>
+        </button>
+        <button class="segment-button" id="manuscriptModeChapters" type="button" role="tab" aria-selected="false" aria-controls="chapterEditorView">
+          <span class="segment-icon">章別</span>
+          <span><strong>章別編集</strong><small>章ごとに整理して編集</small></span>
+        </button>
+      </div>
+      <p class="mode-guidance" id="editorModeGuidance"><strong>おすすめ：</strong>Wordなどの原稿がある場合は、全文編集へそのまま貼り付けてください。</p>
+    </div>
+
+    <div id="fullEditorView" class="editor-view" role="tabpanel" aria-labelledby="manuscriptModeFull">
+      <div class="quick-heading-toolbar" aria-label="見出し挿入">
+        <span>選択行を見出しに</span>
+        <button class="mini-action" id="insertHeading1Btn" type="button" title="大見出し（章タイトル）">大見出し</button>
+        <button class="mini-action" id="insertHeading2Btn" type="button" title="中見出し">中見出し</button>
+        <button class="mini-action" id="insertHeading3Btn" type="button" title="小見出し">小見出し</button>
+      </div>
+      <label class="field body-field full-body-field">
+        <span>本文全体</span>
+        <textarea id="bodyInput" placeholder="ここに本文を貼り付けてください。" spellcheck="false"># 第1章　組版アプリv008
+
+これは、組版アプリv008の動作確認用原稿です。
 
 右側の設定を変更すると、用紙サイズ、余白、フォント、文字サイズ、文字間、行間が中央のプレビューへ自動反映されます。
 
-## 見出しの入力方法
+## 全文編集と章別編集
 
-本文内で行頭に「# 」「## 」「### 」を付けると、大見出し・中見出し・小見出しとして自動認識します。見出し記号と文字の間には半角スペースを入れてください。
+既存のWord原稿などは「全文編集」にまとめて貼り付けられます。行頭に「# 」を付けた大見出しは章タイトルとして認識されます。
 
-### 段落単位の調整
+### 迷わない編集方法
 
-中央プレビューの本文段落をクリックすると、その段落だけ文字サイズ、行間、文字間、揃え、字下げ、前後余白などを調整できます。
+「章別編集」へ切り替えると、第1章、第2章のように章ごとの一覧から選んで編集できます。どちらで変更しても、もう一方へ自動反映されます。
 
 # 第2章　保存と出力
 
-強制改ページや「次の段落と同じページに置く」設定にも対応しています。個別設定を解除すると、本文全体の組版設定へ戻ります。
+章の追加、複製、削除、並び替えにも対応しています。JSON出力はバックアップや別端末への移動に使用してください。
 
-JSON出力は、バックアップや別端末への移動に使用してください。PDFとして保存する際は、右上の「PDF出力」を押し、ブラウザの印刷画面で余白なし、倍率100%を推奨します。</textarea>
-</label>
-<p class="body-input-note">空行は入力した行数のまま反映されます。行頭の「# 」「## 」「### 」は大・中・小見出しとして認識します。</p>
-</div>
+PDFとして保存する際は、右上の「PDF出力」を押し、ブラウザの印刷画面で余白なし、倍率100%を推奨します。</textarea>
+      </label>
+      <div class="input-help-card">
+        <strong>見出しの書き方</strong>
+        <span><code># 大見出し</code>　<code>## 中見出し</code>　<code>### 小見出し</code></span>
+        <small>記号と文字の間に半角スペースを入れます。ボタンからも設定できます。</small>
+      </div>
+    </div>
+
+    <div id="chapterEditorView" class="editor-view chapter-editor-view" role="tabpanel" aria-labelledby="manuscriptModeChapters" hidden>
+      <section class="chapter-list-card">
+        <div class="chapter-list-header">
+          <div>
+            <strong>章の一覧</strong>
+            <span id="chapterSummary">0章</span>
+          </div>
+          <button class="button chapter-add-button" id="addChapterBtn" type="button">＋ 章を追加</button>
+        </div>
+        <div class="chapter-list" id="chapterList" aria-label="章の一覧"></div>
+      </section>
+
+      <section class="chapter-edit-card" id="chapterEditCard">
+        <div class="chapter-edit-header">
+          <div>
+            <p class="eyebrow">SELECTED CHAPTER</p>
+            <strong id="selectedChapterLabel">章を選択してください</strong>
+            <span id="selectedChapterMeta"></span>
+          </div>
+          <div class="chapter-order-actions" aria-label="章の並び順">
+            <button class="icon-button compact" id="chapterMoveUpBtn" type="button" title="前へ移動" aria-label="前へ移動">↑</button>
+            <button class="icon-button compact" id="chapterMoveDownBtn" type="button" title="後ろへ移動" aria-label="後ろへ移動">↓</button>
+          </div>
+        </div>
+
+        <div class="chapter-empty" id="chapterEmptyState">
+          <strong>章がまだありません</strong>
+          <p>「章を追加」を押すか、全文編集で <code># 章タイトル</code> を入力してください。</p>
+          <button class="button modal-primary" id="addFirstChapterBtn" type="button">最初の章を追加</button>
+        </div>
+
+        <div id="chapterControls" hidden>
+          <label class="field compact-gap">
+            <span>章タイトル</span>
+            <input id="chapterTitleInput" maxlength="160" placeholder="例：第1章　はじめに" type="text"/>
+          </label>
+          <label class="field chapter-body-field">
+            <span>この章の本文</span>
+            <textarea id="chapterBodyInput" placeholder="この章の本文を入力してください。中見出しは「## 」、小見出しは「### 」で入力できます。" spellcheck="false"></textarea>
+          </label>
+          <div class="chapter-footer-actions">
+            <button class="button chapter-secondary" id="duplicateChapterBtn" type="button">章を複製</button>
+            <button class="button danger-outline" id="deleteChapterBtn" type="button">章を削除</button>
+          </div>
+        </div>
+      </section>
+
+      <div class="chapter-mode-note">
+        <strong>全文編集との関係</strong>
+        <p>章タイトルは全文内の <code># 大見出し</code> に対応します。中見出し・小見出しは各章本文へそのまま残ります。</p>
+      </div>
+    </div>
+  </div>
 </section>
 <section aria-labelledby="previewTitle" class="preview-panel">
 <div class="preview-toolbar">

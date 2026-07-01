@@ -1241,3 +1241,497 @@ body.modal-open {
     display: none !important;
   }
 }
+
+/* v008: わかりやすい原稿・章管理 UI */
+.workspace {
+  grid-template-columns: minmax(360px, 0.98fr) minmax(520px, 1.48fr) minmax(300px, 0.8fr);
+}
+
+.manuscript-header {
+  min-height: 64px;
+}
+
+.manuscript-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  padding: 14px;
+  overflow: auto;
+}
+
+.document-info-card,
+.editor-mode-card,
+.chapter-list-card,
+.chapter-edit-card,
+.input-help-card,
+.chapter-mode-note {
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  background: #fff;
+}
+
+.document-info-card {
+  padding: 12px;
+  background: #fbfcfc;
+}
+
+.section-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.section-label-row > strong,
+.section-label-row > div > strong {
+  font-size: 13px;
+}
+
+.section-label-row > span,
+.section-label-row > div > span {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.field.compact-gap {
+  margin-bottom: 9px;
+}
+
+.field.no-margin {
+  margin-bottom: 0;
+}
+
+.editor-mode-card {
+  padding: 12px;
+  background: linear-gradient(180deg, #fff, #f8faf9);
+}
+
+.mode-label-row {
+  align-items: flex-start;
+}
+
+.mode-label-row > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sync-badge {
+  flex: 0 0 auto;
+  padding: 4px 7px;
+  color: var(--accent-strong) !important;
+  background: var(--accent-soft);
+  border-radius: 999px;
+  font-size: 9px !important;
+  font-weight: 800;
+}
+
+.segmented-control {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.segment-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 9px;
+  color: var(--text);
+  text-align: left;
+  background: #fff;
+  border: 1px solid #d5dbe1;
+  border-radius: 9px;
+}
+
+.segment-button:hover {
+  border-color: #9bb2aa;
+  background: #f8fbfa;
+}
+
+.segment-button.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px rgba(46, 91, 79, 0.12);
+}
+
+.segment-button > span:last-child {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.segment-button strong {
+  font-size: 12px;
+}
+
+.segment-button small {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.segment-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 35px;
+  height: 35px;
+  color: var(--accent-strong);
+  background: #eff5f2;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.segment-button.active .segment-icon {
+  color: #fff;
+  background: var(--accent);
+}
+
+.mode-guidance {
+  margin: 8px 0 0;
+  color: #4d5966;
+  font-size: 10px;
+  line-height: 1.55;
+}
+
+.editor-view {
+  min-height: 0;
+}
+
+.quick-heading-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-bottom: 8px;
+  padding: 7px 8px;
+  background: #f5f7f8;
+  border: 1px solid #e1e6eb;
+  border-radius: 8px;
+}
+
+.quick-heading-toolbar > span {
+  margin-right: auto;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.mini-action {
+  padding: 4px 7px;
+  color: #3c4a55;
+  background: #fff;
+  border: 1px solid #cfd6dd;
+  border-radius: 6px;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.mini-action:hover {
+  color: var(--accent-strong);
+  border-color: #92aca2;
+  background: var(--accent-soft);
+}
+
+.full-body-field {
+  margin-bottom: 8px;
+}
+
+.full-body-field textarea {
+  min-height: 370px;
+  resize: vertical;
+}
+
+.input-help-card,
+.chapter-mode-note {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px;
+  color: #56626e;
+  background: #f8fafb;
+  font-size: 10px;
+  line-height: 1.55;
+}
+
+.input-help-card strong,
+.chapter-mode-note strong {
+  color: #34414c;
+  font-size: 11px;
+}
+
+.input-help-card code,
+.chapter-mode-note code,
+.chapter-empty code {
+  padding: 1px 4px;
+  color: #244b41;
+  background: #e9f1ee;
+  border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.chapter-editor-view {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.chapter-editor-view[hidden] {
+  display: none;
+}
+
+.chapter-list-card {
+  overflow: hidden;
+}
+
+.chapter-list-header,
+.chapter-edit-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 11px;
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.chapter-list-header > div,
+.chapter-edit-header > div:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.chapter-list-header strong,
+.chapter-edit-header strong {
+  font-size: 12px;
+}
+
+.chapter-list-header span,
+.chapter-edit-header span {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.button.chapter-add-button {
+  min-height: 30px;
+  padding: 5px 8px;
+  color: #fff;
+  background: var(--accent);
+  font-size: 10px;
+}
+
+.chapter-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  max-height: 230px;
+  padding: 8px;
+  overflow: auto;
+  background: #f7f9f9;
+}
+
+.chapter-list-item {
+  width: 100%;
+  padding: 8px 9px;
+  text-align: left;
+  background: #fff;
+  border: 1px solid #dfe4e8;
+  border-radius: 8px;
+}
+
+.chapter-list-item:hover {
+  border-color: #9db3ab;
+}
+
+.chapter-list-item.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.chapter-list-item-main {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.chapter-number {
+  display: grid;
+  place-items: center;
+  flex: 0 0 23px;
+  height: 23px;
+  color: #fff;
+  background: #728079;
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.chapter-list-item.active .chapter-number {
+  background: var(--accent);
+}
+
+.chapter-list-copy {
+  min-width: 0;
+}
+
+.chapter-list-title {
+  display: block;
+  overflow: hidden;
+  color: #27333d;
+  font-size: 11px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chapter-list-meta {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 8.5px;
+}
+
+.chapter-subheadings {
+  margin: 5px 0 0 30px;
+  color: #71808c;
+  font-size: 8.5px;
+  line-height: 1.45;
+}
+
+.chapter-preface-badge {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 1px 5px;
+  color: #69572f;
+  background: #f5edd5;
+  border-radius: 999px;
+  font-size: 7px;
+  vertical-align: 1px;
+}
+
+.chapter-edit-card {
+  overflow: hidden;
+}
+
+.chapter-edit-header .eyebrow {
+  margin-bottom: 0;
+  font-size: 8px;
+}
+
+.chapter-order-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.chapter-order-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.35;
+}
+
+.chapter-empty {
+  padding: 24px 14px;
+  text-align: center;
+}
+
+.chapter-empty strong {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 13px;
+}
+
+.chapter-empty p {
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.6;
+}
+
+#chapterControls {
+  padding: 11px;
+}
+
+.chapter-body-field {
+  margin-bottom: 8px;
+}
+
+.chapter-body-field textarea {
+  min-height: 270px;
+  resize: vertical;
+}
+
+.chapter-footer-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.button.chapter-secondary,
+.button.danger-outline {
+  min-height: 30px;
+  font-size: 10px;
+}
+
+.button.chapter-secondary {
+  color: #3d4a54;
+  background: #fff;
+  border-color: #cfd7dd;
+}
+
+.button.danger-outline {
+  color: var(--danger);
+  background: #fff;
+  border-color: #dfb5b0;
+}
+
+.button.danger-outline:hover {
+  background: #fff5f4;
+}
+
+.chapter-list-empty {
+  padding: 16px 10px;
+  color: var(--muted);
+  text-align: center;
+  font-size: 10px;
+  line-height: 1.6;
+}
+
+@media (max-width: 1250px) {
+  .workspace {
+    grid-template-columns: minmax(340px, 0.95fr) minmax(470px, 1.35fr) minmax(290px, 0.78fr);
+  }
+
+  .segment-button small {
+    display: none;
+  }
+}
+
+@media print {
+  .manuscript-scroll,
+  .editor-mode-card,
+  .chapter-list-card,
+  .chapter-edit-card,
+  .input-help-card,
+  .chapter-mode-note {
+    display: none !important;
+  }
+}
+
+/* 編集カードを潰さず、左パネル全体をスクロールさせる */
+.manuscript-scroll > .editor-view {
+  flex: 0 0 auto;
+  min-height: auto;
+}
+
+.chapter-list-card,
+.chapter-edit-card {
+  flex: 0 0 auto;
+}
