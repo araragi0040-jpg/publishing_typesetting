@@ -4,8 +4,8 @@
 <head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1" name="viewport"/>
-<meta content="出版社向け簡易組版アプリ v015" name="description"/>
-<title>組版アプリ v015</title>
+<meta content="出版社向け簡易組版アプリ v016" name="description"/>
+<title>組版アプリ v016</title>
 <link href="styles.css" rel="stylesheet"/>
 <link rel="icon" href="data:,">
 </head>
@@ -14,7 +14,7 @@
 <header class="topbar">
 <div class="brand-block">
 <strong>組版アプリ</strong>
-<span class="version-badge">v015</span>
+<span class="version-badge">v016</span>
 </div>
 <label class="project-name-wrap">
 <span>プロジェクト名</span>
@@ -29,6 +29,7 @@
 <button class="button secondary" id="exportBtn" type="button">JSON出力</button>
 <button class="button secondary" id="importBtn" type="button">JSON読込</button>
 <button class="button check-button" id="manuscriptCheckBtn" type="button">原稿チェック <span class="check-count-badge" id="manuscriptCheckBadge">0</span></button>
+<button class="button secondary book-structure-button" id="bookStructureBtn" type="button">書籍構成 <span class="structure-count-badge" id="bookStructureBadge">0</span></button>
 <button class="button secondary media-manager-button" id="mediaManagerBtn" type="button">画像・図表 <span class="media-count-badge" id="mediaCountBadge">0</span></button>
 <button class="button primary" id="printBtn" type="button">PDF保存</button>
 <input accept="application/json,.json" hidden="" id="importFile" type="file"/>
@@ -108,9 +109,9 @@
       </div>
       <label class="field body-field full-body-field">
         <span>本文全体</span>
-        <textarea id="bodyInput" placeholder="ここに本文を貼り付けてください。" spellcheck="false"># 第1章　組版アプリv015
+        <textarea id="bodyInput" placeholder="ここに本文を貼り付けてください。" spellcheck="false"># 第1章　組版アプリv016
 
-これは、組版アプリv015の動作確認用原稿です。用紙設定から「縦書き・右綴じ」へ切り替えると、同じ原稿を縦書きで確認できます。
+これは、組版アプリv016の動作確認用原稿です。用紙設定から「縦書き・右綴じ」へ切り替えると、同じ原稿を縦書きで確認できます。
 
 文字を選択して、**太字**、《《傍点》》、｜組版《くみはん》、__下線__を設定できます。記号はプレビューやPDFには表示されません。
 
@@ -150,6 +151,10 @@
         <div>
           <strong>画像・図表</strong>
           <span>上の「画像」ボタンからアップロードし、カーソル位置へ挿入します。</span>
+        </div>
+        <div>
+          <strong>前付・後付・奥付</strong>
+          <span>上部の「書籍構成」から、使うページだけをONにして入力します。</span>
         </div>
         <small>文字装飾や画像位置の記号は、プレビュー・PDFには表示されません。</small>
       </div>
@@ -682,6 +687,91 @@
 </section>
 </div>
 
+
+<div class="modal-backdrop" hidden id="bookStructureModal">
+<section aria-labelledby="bookStructureModalTitle" aria-modal="true" class="modal-card book-structure-modal-card" role="dialog">
+<header class="modal-header">
+<div>
+<p class="eyebrow">BOOK STRUCTURE</p>
+<h2 id="bookStructureModalTitle">書籍構成</h2>
+</div>
+<button aria-label="閉じる" class="icon-button" data-close-modal="bookStructureModal" type="button">×</button>
+</header>
+<div class="structure-intro-card">
+<div>
+<strong>使うページだけONにしてください</strong>
+<p>ページの順番は自動で整います。入力した内容はプレビューとPDFへすぐ反映されます。</p>
+</div>
+<button class="button modal-secondary" id="fillColophonFromBookInfoBtn" type="button">書籍情報を奥付へ反映</button>
+</div>
+<section class="structure-order-section" aria-label="現在のページ構成">
+<div class="section-label-row"><strong>現在のページ順</strong><span id="bookStructureSummary">本文</span></div>
+<div class="structure-flow" id="bookStructureFlow"></div>
+</section>
+
+<div class="matter-card" data-matter-card="foreword">
+<div class="matter-card-header">
+<label class="matter-toggle"><input id="forewordEnabled" type="checkbox"><span><strong>まえがき</strong><small>本文の前に入れる文章</small></span></label>
+<span class="matter-status" id="forewordStatus">未使用</span>
+</div>
+<div class="matter-card-body" data-matter-body="foreword">
+<div class="field-grid two">
+<label class="field compact"><span>見出し</span><input id="forewordTitle" type="text" maxlength="120" value="まえがき"></label>
+<label class="field compact"><span>配置</span><select id="forewordPlacement"><option value="before-toc">目次の前</option><option value="after-toc">目次の後</option></select></label>
+</div>
+<label class="field"><span>本文</span><textarea id="forewordBody" rows="7" placeholder="まえがきの本文を入力してください。太字などの記法も使用できます。"></textarea></label>
+</div>
+</div>
+
+<div class="matter-card" data-matter-card="afterword">
+<div class="matter-card-header">
+<label class="matter-toggle"><input id="afterwordEnabled" type="checkbox"><span><strong>あとがき</strong><small>本文の後に入れる文章</small></span></label>
+<span class="matter-status" id="afterwordStatus">未使用</span>
+</div>
+<div class="matter-card-body" data-matter-body="afterword">
+<label class="field compact"><span>見出し</span><input id="afterwordTitle" type="text" maxlength="120" value="あとがき"></label>
+<label class="field"><span>本文</span><textarea id="afterwordBody" rows="7" placeholder="あとがきの本文を入力してください。"></textarea></label>
+</div>
+</div>
+
+<div class="matter-card" data-matter-card="authorProfile">
+<div class="matter-card-header">
+<label class="matter-toggle"><input id="authorProfileEnabled" type="checkbox"><span><strong>著者紹介</strong><small>プロフィールや略歴</small></span></label>
+<span class="matter-status" id="authorProfileStatus">未使用</span>
+</div>
+<div class="matter-card-body" data-matter-body="authorProfile">
+<label class="field compact"><span>見出し</span><input id="authorProfileTitle" type="text" maxlength="120" value="著者紹介"></label>
+<label class="field"><span>本文</span><textarea id="authorProfileBody" rows="6" placeholder="著者プロフィール、略歴、活動内容などを入力してください。"></textarea></label>
+</div>
+</div>
+
+<div class="matter-card colophon-editor-card" data-matter-card="colophon">
+<div class="matter-card-header">
+<label class="matter-toggle"><input id="colophonEnabled" type="checkbox"><span><strong>奥付</strong><small>発行情報をまとめた最終ページ</small></span></label>
+<span class="matter-status" id="colophonStatus">未使用</span>
+</div>
+<div class="matter-card-body" data-matter-body="colophon">
+<div class="field-grid two">
+<label class="field compact"><span>奥付見出し</span><input id="colophonHeading" type="text" maxlength="80" value="奥付"></label>
+<label class="field compact"><span>書名</span><input id="colophonBookTitle" type="text" maxlength="160" placeholder="未入力時は書籍タイトルを使用"></label>
+<label class="field compact"><span>著者</span><input id="colophonAuthor" type="text" maxlength="160" placeholder="未入力時は著者名を使用"></label>
+<label class="field compact"><span>発行日</span><input id="colophonPublicationDate" type="text" maxlength="80" placeholder="例：2026年7月1日"></label>
+<label class="field compact"><span>版・刷</span><input id="colophonEdition" type="text" maxlength="80" placeholder="例：初版第1刷"></label>
+<label class="field compact"><span>発行者</span><input id="colophonIssuedBy" type="text" maxlength="160" placeholder="氏名など"></label>
+<label class="field compact"><span>発行所</span><input id="colophonPublisher" type="text" maxlength="160" placeholder="出版社名など"></label>
+<label class="field compact"><span>連絡先・URL</span><input id="colophonContact" type="text" maxlength="240" placeholder="メール、URL、住所など"></label>
+<label class="field compact wide"><span>著作権表記</span><input id="colophonCopyright" type="text" maxlength="240" placeholder="例：© 2026 著者名"></label>
+</div>
+<label class="field"><span>備考</span><textarea id="colophonNotes" rows="3" placeholder="印刷所、ISBN、注意書きなど、必要な情報だけ入力してください。"></textarea></label>
+</div>
+</div>
+
+<footer class="structure-modal-footer">
+<p>本文はこれまでどおり「全文編集／章別編集」で管理します。</p>
+<button class="button modal-primary" data-close-modal="bookStructureModal" type="button">構成を確認して閉じる</button>
+</footer>
+</section>
+</div>
 
 <div class="modal-backdrop" hidden id="mediaModal">
 <section aria-labelledby="mediaModalTitle" aria-modal="true" class="modal-card media-modal-card" role="dialog">

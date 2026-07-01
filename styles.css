@@ -2589,3 +2589,68 @@ ruby.inline-ruby rt {
   .media-asset-card { grid-template-columns: 1fr; }
   .media-asset-preview { min-height: 100px; }
 }
+
+
+/* v016: front matter, back matter and colophon */
+.book-structure-button { white-space: nowrap; }
+.structure-count-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 20px; height: 20px; margin-left: 4px; padding: 0 6px;
+  border-radius: 999px; background: #e6edf2; color: #30495a;
+  font-size: 10px; font-weight: 800;
+}
+.book-structure-modal-card { width: min(980px, calc(100vw - 32px)); max-height: min(90vh, 940px); overflow: auto; }
+.structure-intro-card {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  margin-bottom: 14px; padding: 14px; border: 1px solid #dce4ec;
+  border-radius: 14px; background: linear-gradient(135deg, #f7fafc, #eef5f7);
+}
+.structure-intro-card strong { display: block; color: #26384a; font-size: 14px; }
+.structure-intro-card p { margin: 4px 0 0; color: #6f7c8b; font-size: 11px; line-height: 1.7; }
+.structure-order-section { margin-bottom: 14px; padding: 13px; border: 1px solid #dfe6ed; border-radius: 13px; background: #fff; }
+.structure-flow { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 9px; align-items: center; }
+.structure-flow-item { display: inline-flex; align-items: center; gap: 6px; }
+.structure-flow-item:not(:last-child)::after { content: '›'; color: #a2acb8; font-weight: 800; }
+.structure-chip { padding: 7px 10px; border-radius: 999px; background: #eef2f5; color: #4d5a69; font-size: 11px; font-weight: 700; }
+.structure-chip.primary { background: #304f71; color: #fff; }
+.structure-chip.optional { background: #e8f3ed; color: #2d6645; }
+.matter-card { margin-top: 11px; overflow: hidden; border: 1px solid #dce3eb; border-radius: 14px; background: #fff; }
+.matter-card.active { border-color: #7da28a; box-shadow: 0 0 0 3px rgba(75,128,91,.08); }
+.matter-card-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; background: #f8fafc; }
+.matter-toggle { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+.matter-toggle input { width: 18px; height: 18px; accent-color: #396a4a; }
+.matter-toggle > span { display: grid; gap: 2px; }
+.matter-toggle strong { color: #26384a; font-size: 13px; }
+.matter-toggle small { color: #7b8795; font-size: 10px; }
+.matter-status { padding: 4px 8px; border-radius: 999px; background: #e8edf2; color: #74808d; font-size: 10px; font-weight: 800; }
+.matter-card.active .matter-status { background: #dcefe3; color: #326345; }
+.matter-card-body { display: grid; gap: 10px; padding: 13px 14px 15px; border-top: 1px solid #e6ebf0; }
+.matter-card:not(.active) .matter-card-body { display: none; }
+.matter-card textarea { min-height: 92px; resize: vertical; }
+.colophon-editor-card .field-grid .wide { grid-column: 1 / -1; }
+.structure-modal-footer { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 15px; padding-top: 13px; border-top: 1px solid #dfe5ec; }
+.structure-modal-footer p { margin: 0; color: #778291; font-size: 11px; }
+
+/* Generated matter pages */
+.matter-heading { opacity: .98; }
+.matter-paragraph { }
+.colophon-page {
+  box-sizing: border-box; width: 100%; min-height: 100%; display: flex; flex-direction: column;
+  justify-content: flex-end; gap: 4mm; padding-block: 4mm;
+}
+.colophon-heading { margin: 0 0 5mm; font-size: 14pt; font-weight: 700; letter-spacing: .12em; }
+.colophon-book-title { margin: 0 0 4mm; font-size: 13pt; font-weight: 700; }
+.colophon-details { display: grid; gap: 0; width: min(100%, 120mm); }
+.colophon-row { display: grid; grid-template-columns: 24mm minmax(0, 1fr); gap: 4mm; padding: 2.2mm 0; border-bottom: .25mm solid rgba(70,70,70,.22); font-size: 8.5pt; line-height: 1.65; }
+.colophon-label { color: #5d6269; font-weight: 500; }
+.colophon-value { color: #1f2429; white-space: pre-wrap; overflow-wrap: anywhere; }
+.colophon-copyright { margin: 4mm 0 0; font-size: 8pt; line-height: 1.6; }
+.colophon-notes { margin: 1mm 0 0; font-size: 7.5pt; line-height: 1.65; white-space: pre-wrap; }
+.writing-vertical .colophon-page { writing-mode: horizontal-tb; direction: ltr; justify-content: flex-end; }
+.writing-vertical .colophon-page * { text-orientation: mixed; }
+
+@media (max-width: 760px) {
+  .structure-intro-card, .structure-modal-footer { align-items: stretch; flex-direction: column; }
+  .structure-intro-card .button, .structure-modal-footer .button { width: 100%; }
+  .book-structure-modal-card { width: calc(100vw - 16px); }
+}

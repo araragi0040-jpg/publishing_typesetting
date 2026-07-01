@@ -1,24 +1,24 @@
 'use strict';
 
-const APP_VERSION = 'v015';
-const SCHEMA_VERSION = 15;
+const APP_VERSION = 'v016';
+const SCHEMA_VERSION = 16;
 const AUTOSAVE_DELAY = 700;
 const MAX_MEDIA_ASSETS = 20;
 const MAX_MEDIA_DATA_CHARS = 3_200_000;
 const MAX_MEDIA_SOURCE_BYTES = 12 * 1024 * 1024;
 const MEDIA_MARKER_PATTERN = /^\s*\[\[figure:([a-zA-Z0-9_-]+)\]\]\s*$/;
 
-const PROJECT_INDEX_KEY = 'typesetting-app-v015-project-index';
-const PROJECT_PREFIX = 'typesetting-app-v015-project:';
-const CURRENT_PROJECT_KEY = 'typesetting-app-v015-current-project';
-const TEMPLATE_STORAGE_KEY = 'typesetting-app-v015-templates';
+const PROJECT_INDEX_KEY = 'typesetting-app-v016-project-index';
+const PROJECT_PREFIX = 'typesetting-app-v016-project:';
+const CURRENT_PROJECT_KEY = 'typesetting-app-v016-current-project';
+const TEMPLATE_STORAGE_KEY = 'typesetting-app-v016-templates';
 
-const LEGACY_V14_PROJECT_INDEX_KEY = 'typesetting-app-v014-project-index';
-const LEGACY_V14_PROJECT_PREFIX = 'typesetting-app-v014-project:';
-const LEGACY_V14_CURRENT_PROJECT_KEY = 'typesetting-app-v014-current-project';
-const LEGACY_V14_TEMPLATE_STORAGE_KEY = 'typesetting-app-v014-templates';
+const LEGACY_V15_PROJECT_INDEX_KEY = 'typesetting-app-v015-project-index';
+const LEGACY_V15_PROJECT_PREFIX = 'typesetting-app-v015-project:';
+const LEGACY_V15_CURRENT_PROJECT_KEY = 'typesetting-app-v015-current-project';
+const LEGACY_V15_TEMPLATE_STORAGE_KEY = 'typesetting-app-v015-templates';
 const LEGACY_V1_STORAGE_KEY = 'typesetting-app-v001';
-const MIGRATION_MARKER_KEY = 'typesetting-app-v015-migration-complete';
+const MIGRATION_MARKER_KEY = 'typesetting-app-v016-migration-complete';
 
 const DEFAULT_SETTINGS = Object.freeze({
   paperPreset: 'A5',
@@ -103,11 +103,11 @@ const DEFAULT_SETTINGS = Object.freeze({
 
 const SAMPLE_MANUSCRIPT = Object.freeze({
   title: 'サンプルタイトル',
-  subtitle: '画像・図表対応の確認用原稿',
+  subtitle: '前付・後付・奥付対応の確認用原稿',
   author: '著者名',
-  body: `# 第1章　組版アプリv015
+  body: `# 第1章　組版アプリv016
 
-これは、組版アプリv015の動作確認用原稿です。用紙設定から「縦書き・右綴じ」へ切り替えると、同じ原稿を縦書きで確認できます。
+これは、組版アプリv016の動作確認用原稿です。用紙設定から「縦書き・右綴じ」へ切り替えると、同じ原稿を縦書きで確認できます。
 
 文字を選択して、**太字**、《《傍点》》、｜組版《くみはん》、__下線__を設定できます。記号はプレビューやPDFには表示されません。
 
@@ -134,9 +134,19 @@ const SAMPLE_MANUSCRIPT = Object.freeze({
 右上の「PDF保存」を押すと、横書き・縦書きとも現在のページプレビューをそのままPDFとして直接保存できます。PCの印刷設定は使用しません。`
 });
 
+const DEFAULT_BOOK_MATTER = Object.freeze({
+  foreword: { enabled: false, title: 'まえがき', body: '', placement: 'before-toc' },
+  afterword: { enabled: false, title: 'あとがき', body: '' },
+  authorProfile: { enabled: false, title: '著者紹介', body: '' },
+  colophon: {
+    enabled: false, heading: '奥付', bookTitle: '', author: '', publicationDate: '',
+    edition: '', issuedBy: '', publisher: '', contact: '', copyright: '', notes: ''
+  }
+});
+
 const DEFAULT_STATE = Object.freeze({
-  projectName: '組版アプリ v015 サンプル',
-  manuscript: { ...SAMPLE_MANUSCRIPT, paragraphs: [], chapters: [], media: [] },
+  projectName: '組版アプリ v016 サンプル',
+  manuscript: { ...SAMPLE_MANUSCRIPT, paragraphs: [], chapters: [], media: [], matter: deepClone(DEFAULT_BOOK_MATTER) },
   paragraphOverrides: {},
   settings: DEFAULT_SETTINGS,
   metadata: {
@@ -225,7 +235,7 @@ let mediaAssets = [];
 let mediaInsertTarget = 'bodyInput';
 let selectedMediaId = null;
 const MAX_MANUSCRIPT_ISSUES = 300;
-const MANUSCRIPT_MODE_KEY = 'typesetting-app-v015-manuscript-mode';
+const MANUSCRIPT_MODE_KEY = 'typesetting-app-v016-manuscript-mode';
 
 window.addEventListener('DOMContentLoaded', init);
 
@@ -246,6 +256,7 @@ function init() {
   updateJapaneseTypesettingControls();
   updateDocumentLayoutControls();
   updateMediaUi();
+  updateBookStructureUi();
   scheduleManuscriptCheck(0);
   scheduleRender();
   refreshCurrentProjectStatus();
@@ -297,7 +308,15 @@ function cacheElements() {
     'pdfExportOverlay', 'pdfExportStatus', 'pdfExportProgress',
     'mediaManagerBtn', 'mediaCountBadge', 'mediaModal', 'mediaFileInput',
     'mediaStorageSummary', 'mediaStorageProgress', 'mediaTargetNote',
-    'mediaLibraryList', 'mediaEmptyState'
+    'mediaLibraryList', 'mediaEmptyState',
+    'bookStructureBtn', 'bookStructureBadge', 'bookStructureModal', 'bookStructureSummary',
+    'bookStructureFlow', 'fillColophonFromBookInfoBtn',
+    'forewordEnabled', 'forewordTitle', 'forewordPlacement', 'forewordBody', 'forewordStatus',
+    'afterwordEnabled', 'afterwordTitle', 'afterwordBody', 'afterwordStatus',
+    'authorProfileEnabled', 'authorProfileTitle', 'authorProfileBody', 'authorProfileStatus',
+    'colophonEnabled', 'colophonHeading', 'colophonBookTitle', 'colophonAuthor',
+    'colophonPublicationDate', 'colophonEdition', 'colophonIssuedBy', 'colophonPublisher',
+    'colophonContact', 'colophonCopyright', 'colophonNotes', 'colophonStatus'
   ];
 
   ids.forEach((id) => {
@@ -338,6 +357,9 @@ function bindEvents() {
       if ([els.titleInput, els.subtitleInput, els.authorInput].includes(element)) {
         scheduleManuscriptCheck();
       }
+      if ([els.titleInput, els.authorInput, els.showDocumentHeading, els.showToc, els.tocTitle].includes(element)) {
+        updateBookStructureUi();
+      }
     });
   });
 
@@ -372,6 +394,10 @@ function bindEvents() {
     button.addEventListener('click', () => openMediaManager(button.dataset.mediaTarget || 'bodyInput'));
   });
   els.mediaManagerBtn.addEventListener('click', () => openMediaManager(manuscriptEditorMode === 'chapters' && selectedChapterIndex >= 0 ? 'chapterBodyInput' : 'bodyInput'));
+  els.bookStructureBtn.addEventListener('click', openBookStructureModal);
+  els.bookStructureModal.addEventListener('input', handleBookStructureChange);
+  els.bookStructureModal.addEventListener('change', handleBookStructureChange);
+  els.fillColophonFromBookInfoBtn.addEventListener('click', fillColophonFromBookInfo);
   els.mediaFileInput.addEventListener('change', handleMediaFilesSelected);
   els.mediaLibraryList.addEventListener('input', handleMediaLibraryInput);
   els.mediaLibraryList.addEventListener('change', handleMediaLibraryInput);
@@ -519,7 +545,7 @@ function loadInitialProject() {
     applyState(migrated);
     saveCurrentProject(false);
     updateSaveStatus('v001データを移行済み');
-    showToast('v001の保存データをv015へ移行しました。');
+    showToast('v001の保存データをv016へ移行しました。');
     return;
   }
 
@@ -539,15 +565,15 @@ function migrateLegacyData() {
     return;
   }
 
-  const legacyIndex = readJsonFromStorage(LEGACY_V14_PROJECT_INDEX_KEY, []);
+  const legacyIndex = readJsonFromStorage(LEGACY_V15_PROJECT_INDEX_KEY, []);
   let migratedCount = 0;
   let mappedCurrentId = null;
-  const legacyCurrentId = safeStorageGet(LEGACY_V14_CURRENT_PROJECT_KEY);
+  const legacyCurrentId = safeStorageGet(LEGACY_V15_CURRENT_PROJECT_KEY);
 
   if (Array.isArray(legacyIndex)) {
     legacyIndex.forEach((item) => {
       if (!item?.id) return;
-      const raw = readJsonFromStorage(`${LEGACY_V14_PROJECT_PREFIX}${item.id}`, null);
+      const raw = readJsonFromStorage(`${LEGACY_V15_PROJECT_PREFIX}${item.id}`, null);
       if (!raw) return;
       const state = normalizeState(raw);
       state.metadata.appVersion = APP_VERSION;
@@ -561,7 +587,7 @@ function migrateLegacyData() {
     });
   }
 
-  const legacyTemplates = readJsonFromStorage(LEGACY_V14_TEMPLATE_STORAGE_KEY, []);
+  const legacyTemplates = readJsonFromStorage(LEGACY_V15_TEMPLATE_STORAGE_KEY, []);
   if (Array.isArray(legacyTemplates) && legacyTemplates.length) {
     safeStorageSet(TEMPLATE_STORAGE_KEY, JSON.stringify(legacyTemplates));
   }
@@ -570,7 +596,7 @@ function migrateLegacyData() {
   safeStorageSet(MIGRATION_MARKER_KEY, 'true');
 
   if (migratedCount > 0) {
-    showToast(`v014のプロジェクト${migratedCount}件をv015へ移行しました。`);
+    showToast(`v015のプロジェクト${migratedCount}件をv016へ移行しました。`);
   }
 }
 
@@ -1782,16 +1808,20 @@ function renderDocument() {
 
 
 function paginateDocumentWithToc(state) {
-  if (!state.settings.showToc) return paginate(state);
-
+  const matter = normalizeBookMatter(state.manuscript.matter);
   const records = Array.isArray(state.manuscript.paragraphs)
     ? state.manuscript.paragraphs
     : createParagraphRecords(state.manuscript.body);
   const hasBodyContent = records.length > 0 || sanitizeBlankLineCount(state.manuscript.trailingBlankLines) > 0;
-  const titlePages = [];
-  if (state.settings.showDocumentHeading) {
-    titlePages.push([{ type: 'heading', data: state.manuscript }]);
-  }
+
+  const titlePages = state.settings.showDocumentHeading
+    ? [[{ type: 'heading', data: state.manuscript }]]
+    : [];
+  const forewordPages = matter.foreword.enabled
+    ? paginateMatterSection(matter.foreword, state, 'foreword')
+    : [];
+  const forewordBeforeToc = matter.foreword.placement !== 'after-toc' ? forewordPages : [];
+  const forewordAfterToc = matter.foreword.placement === 'after-toc' ? forewordPages : [];
 
   const bodyState = {
     ...state,
@@ -1805,36 +1835,89 @@ function paginateDocumentWithToc(state) {
   let bodyPages = hasBodyContent ? paginate(bodyState) : [];
   if (bodyPages.length === 1 && bodyPages[0].length === 0) bodyPages = [];
 
-  const includedLevels = getTocIncludedLevels(state.settings);
-  const rawEntries = [];
-  bodyPages.forEach((fragments, bodyPageIndex) => {
-    fragments.forEach((fragment) => {
-      if (fragment.type !== 'body-heading') return;
-      const level = Math.min(3, Math.max(1, Number(fragment.record?.level) || 1));
-      if (!includedLevels.includes(level)) return;
-      rawEntries.push({
-        id: fragment.record?.id || createId('toc'),
-        level,
-        text: String(fragment.record?.text || ''),
-        bodyPageIndex
+  let tocPages = [];
+  if (state.settings.showToc) {
+    const includedLevels = getTocIncludedLevels(state.settings);
+    const rawEntries = [];
+    bodyPages.forEach((fragments, bodyPageIndex) => {
+      fragments.forEach((fragment) => {
+        if (fragment.type !== 'body-heading') return;
+        const level = Math.min(3, Math.max(1, Number(fragment.record?.level) || 1));
+        if (!includedLevels.includes(level)) return;
+        rawEntries.push({
+          id: fragment.record?.id || createId('toc'),
+          level,
+          text: String(fragment.record?.text || ''),
+          bodyPageIndex
+        });
       });
     });
-  });
 
-  let tocPages = [];
-  let assumedTocPageCount = 1;
-  for (let attempt = 0; attempt < 5; attempt += 1) {
-    const pageOffset = titlePages.length + assumedTocPageCount;
-    const entries = rawEntries.map((entry) => ({
-      ...entry,
-      pageNumber: Math.trunc(sanitizeNumber(state.settings.pageNumberStart, 1)) + pageOffset + entry.bodyPageIndex
-    }));
-    tocPages = paginateTocEntries(entries, state.settings);
-    if (tocPages.length === assumedTocPageCount) break;
-    assumedTocPageCount = tocPages.length;
+    let assumedTocPageCount = 1;
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const pageOffset = titlePages.length + forewordBeforeToc.length + assumedTocPageCount + forewordAfterToc.length;
+      const entries = rawEntries.map((entry) => ({
+        ...entry,
+        pageNumber: Math.trunc(sanitizeNumber(state.settings.pageNumberStart, 1)) + pageOffset + entry.bodyPageIndex
+      }));
+      tocPages = paginateTocEntries(entries, state.settings);
+      if (tocPages.length === assumedTocPageCount) break;
+      assumedTocPageCount = tocPages.length;
+    }
   }
 
-  return [...titlePages, ...tocPages, ...bodyPages];
+  const afterwordPages = matter.afterword.enabled
+    ? paginateMatterSection(matter.afterword, state, 'afterword')
+    : [];
+  const authorProfilePages = matter.authorProfile.enabled
+    ? paginateMatterSection(matter.authorProfile, state, 'authorProfile')
+    : [];
+  const colophonPages = matter.colophon.enabled
+    ? [[{ type: 'colophon', data: deepClone(matter.colophon) }]]
+    : [];
+
+  return [
+    ...titlePages,
+    ...forewordBeforeToc,
+    ...tocPages,
+    ...forewordAfterToc,
+    ...bodyPages,
+    ...afterwordPages,
+    ...authorProfilePages,
+    ...colophonPages
+  ];
+}
+
+function paginateMatterSection(section, state, sectionKey) {
+  const title = String(section?.title || '').trim();
+  const body = String(section?.body || '');
+  if (!title && !body.trim()) return [];
+  const source = `${title ? `# ${title}` : ''}${title && body ? '\n\n' : ''}${body}`;
+  const parsed = parseBodyStructure(source);
+  const temporaryState = {
+    manuscript: {
+      title: '', subtitle: '', author: '', body: source,
+      paragraphs: createParagraphRecords(source),
+      trailingBlankLines: parsed.trailingBlankLines,
+      media: state.manuscript.media || []
+    },
+    paragraphOverrides: {},
+    settings: {
+      ...state.settings,
+      showDocumentHeading: false,
+      bodyStartOnNewPage: false,
+      showToc: false,
+      heading1PageBreakBefore: false
+    }
+  };
+  return paginate(temporaryState).map((page) => page.map((fragment) => {
+    const base = { ...fragment, matterSection: sectionKey };
+    if (fragment.type === 'body-heading') return { ...base, type: 'matter-heading' };
+    if (fragment.type === 'paragraph') return { ...base, type: 'matter-paragraph' };
+    if (fragment.type === 'figure') return { ...base, type: 'matter-figure' };
+    if (fragment.type === 'blank-space') return { ...base, type: 'matter-blank-space' };
+    return base;
+  }));
 }
 
 function paginateTocEntries(entries, settings) {
@@ -2724,7 +2807,7 @@ function buildPreview(pageFragments, settings, manuscript) {
 
     let pageChapter = runningChapter;
     fragments.forEach((fragment) => {
-      if (fragment.type === 'body-heading' && Number(fragment.record?.level) === 1) {
+      if ((fragment.type === 'body-heading' || fragment.type === 'matter-heading') && Number(fragment.record?.level) === 1) {
         pageChapter = String(fragment.record.text || '');
         runningChapter = pageChapter;
       }
@@ -2743,6 +2826,34 @@ function buildPreview(pageFragments, settings, manuscript) {
         content.appendChild(createBodyHeadingElement(fragment.record, settings, {
           blankLinesBefore: fragment.blankLinesBefore
         }));
+      } else if (fragment.type === 'matter-heading') {
+        const matterHeading = createBodyHeadingElement(fragment.record, settings, {
+          blankLinesBefore: fragment.blankLinesBefore
+        });
+        matterHeading.classList.add('matter-heading');
+        content.appendChild(matterHeading);
+      } else if (fragment.type === 'matter-paragraph') {
+        const matterParagraph = createParagraphElement(fragment.text, {
+          continuation: fragment.continuation,
+          override: fragment.override,
+          blankLinesBefore: fragment.blankLinesBefore,
+          settings,
+          isFinal: fragment.isFinal,
+          selectable: false
+        });
+        matterParagraph.classList.add('matter-paragraph');
+        matterParagraph.removeAttribute('data-paragraph-id');
+        content.appendChild(matterParagraph);
+      } else if (fragment.type === 'matter-figure') {
+        const asset = findMediaAsset(fragment.mediaId, manuscript.media);
+        content.appendChild(createFigureElement(fragment.record, asset, settings, {
+          blankLinesBefore: fragment.blankLinesBefore,
+          selectable: false
+        }));
+      } else if (fragment.type === 'matter-blank-space') {
+        content.appendChild(createBlankSpaceElement(fragment.lines, settings));
+      } else if (fragment.type === 'colophon') {
+        content.appendChild(createColophonElement(fragment.data, manuscript, settings));
       } else if (fragment.type === 'figure') {
         const asset = findMediaAsset(fragment.mediaId, manuscript.media);
         content.appendChild(createFigureElement(fragment.record, asset, settings, {
@@ -2769,6 +2880,65 @@ function buildPreview(pageFragments, settings, manuscript) {
     paper.appendChild(content);
     els.pages.appendChild(paper);
   });
+}
+
+function createColophonElement(data, manuscript, settings = DEFAULT_SETTINGS) {
+  const source = normalizeBookMatter({ colophon: data }).colophon;
+  const root = document.createElement('section');
+  root.className = 'colophon-page';
+
+  const heading = document.createElement('h2');
+  heading.className = 'colophon-heading';
+  setTypesetText(heading, source.heading || '奥付', { ...settings, writingMode: 'horizontal-tb' });
+  root.appendChild(heading);
+
+  const bookTitle = source.bookTitle || manuscript.title || '';
+  if (bookTitle) {
+    const title = document.createElement('div');
+    title.className = 'colophon-book-title';
+    setTypesetText(title, bookTitle, { ...settings, writingMode: 'horizontal-tb' });
+    root.appendChild(title);
+  }
+
+  const rows = [
+    ['著者', source.author || manuscript.author],
+    ['発行日', source.publicationDate],
+    ['版・刷', source.edition],
+    ['発行者', source.issuedBy],
+    ['発行所', source.publisher],
+    ['連絡先', source.contact]
+  ].filter(([, value]) => String(value || '').trim());
+  if (rows.length) {
+    const details = document.createElement('div');
+    details.className = 'colophon-details';
+    rows.forEach(([labelText, valueText]) => {
+      const row = document.createElement('div');
+      row.className = 'colophon-row';
+      const label = document.createElement('span');
+      label.className = 'colophon-label';
+      label.textContent = labelText;
+      const value = document.createElement('strong');
+      value.className = 'colophon-value';
+      value.textContent = String(valueText || '');
+      row.append(label, value);
+      details.appendChild(row);
+    });
+    root.appendChild(details);
+  }
+
+  if (source.copyright) {
+    const copyright = document.createElement('p');
+    copyright.className = 'colophon-copyright';
+    copyright.textContent = source.copyright;
+    root.appendChild(copyright);
+  }
+  if (source.notes) {
+    const notes = document.createElement('p');
+    notes.className = 'colophon-notes';
+    notes.textContent = source.notes;
+    root.appendChild(notes);
+  }
+  return root;
 }
 
 function appendRunningElements(paper, pageIndex, settings, manuscript, chapterTitle) {
@@ -3089,6 +3259,7 @@ function collectState() {
       paragraphs: deepClone(paragraphRecords),
       chapters: serializeChapterModel(),
       media: deepClone(mediaAssets),
+      matter: collectBookMatter(),
       trailingBlankLines
     },
     paragraphOverrides: deepClone(paragraphOverrides),
@@ -3202,6 +3373,8 @@ function applyState(state) {
     mediaAssets = deepClone(normalized.manuscript.media || []);
     selectedMediaId = null;
     updateMediaUi();
+    applyBookMatterToInputs(normalized.manuscript.matter);
+    updateBookStructureUi();
     selectedParagraphId = null;
     selectedChapterIndex = -1;
     refreshChapterModelFromBody({ preserveSelection: false });
@@ -3304,6 +3477,7 @@ function normalizeState(raw) {
   manuscript.author = String(manuscript.author || '');
   manuscript.body = String(manuscript.body || '');
   manuscript.media = normalizeMediaAssets(manuscriptSource.media);
+  manuscript.matter = normalizeBookMatter(manuscriptSource.matter);
   if (!manuscript.body && Array.isArray(manuscriptSource.chapters)) {
     manuscript.body = buildBodyFromChapters(manuscriptSource.chapters);
   }
@@ -3620,7 +3794,7 @@ function createNewProject(requireConfirmation = true, saveExisting = true) {
 
   const blank = normalizeState({
     projectName: '新規組版データ',
-    manuscript: { title: '', subtitle: '', author: '', body: '', paragraphs: [], chapters: [], media: [] },
+    manuscript: { title: '', subtitle: '', author: '', body: '', paragraphs: [], chapters: [], media: [], matter: deepClone(DEFAULT_BOOK_MATTER) },
     paragraphOverrides: {},
     settings: deepClone(DEFAULT_SETTINGS),
     metadata: {}
@@ -4182,6 +4356,175 @@ function refreshCurrentProjectStatus() {
 function updateCharCount() {
   const count = inlineMarkupToPlainText(els.bodyInput.value).replace(/\s/g, '').length;
   els.charCount.textContent = `${count.toLocaleString('ja-JP')}文字`;
+}
+
+function normalizeBookMatter(raw) {
+  const source = raw && typeof raw === 'object' ? raw : {};
+  const foreword = source.foreword && typeof source.foreword === 'object' ? source.foreword : {};
+  const afterword = source.afterword && typeof source.afterword === 'object' ? source.afterword : {};
+  const authorProfile = source.authorProfile && typeof source.authorProfile === 'object' ? source.authorProfile : {};
+  const colophon = source.colophon && typeof source.colophon === 'object' ? source.colophon : {};
+  return {
+    foreword: {
+      enabled: Boolean(foreword.enabled),
+      title: String(foreword.title || 'まえがき'),
+      body: String(foreword.body || ''),
+      placement: foreword.placement === 'after-toc' ? 'after-toc' : 'before-toc'
+    },
+    afterword: {
+      enabled: Boolean(afterword.enabled),
+      title: String(afterword.title || 'あとがき'),
+      body: String(afterword.body || '')
+    },
+    authorProfile: {
+      enabled: Boolean(authorProfile.enabled),
+      title: String(authorProfile.title || '著者紹介'),
+      body: String(authorProfile.body || '')
+    },
+    colophon: {
+      enabled: Boolean(colophon.enabled),
+      heading: String(colophon.heading || '奥付'),
+      bookTitle: String(colophon.bookTitle || ''),
+      author: String(colophon.author || ''),
+      publicationDate: String(colophon.publicationDate || ''),
+      edition: String(colophon.edition || ''),
+      issuedBy: String(colophon.issuedBy || ''),
+      publisher: String(colophon.publisher || ''),
+      contact: String(colophon.contact || ''),
+      copyright: String(colophon.copyright || ''),
+      notes: String(colophon.notes || '')
+    }
+  };
+}
+
+function collectBookMatter() {
+  return normalizeBookMatter({
+    foreword: {
+      enabled: els.forewordEnabled.checked,
+      title: els.forewordTitle.value,
+      body: els.forewordBody.value,
+      placement: els.forewordPlacement.value
+    },
+    afterword: {
+      enabled: els.afterwordEnabled.checked,
+      title: els.afterwordTitle.value,
+      body: els.afterwordBody.value
+    },
+    authorProfile: {
+      enabled: els.authorProfileEnabled.checked,
+      title: els.authorProfileTitle.value,
+      body: els.authorProfileBody.value
+    },
+    colophon: {
+      enabled: els.colophonEnabled.checked,
+      heading: els.colophonHeading.value,
+      bookTitle: els.colophonBookTitle.value,
+      author: els.colophonAuthor.value,
+      publicationDate: els.colophonPublicationDate.value,
+      edition: els.colophonEdition.value,
+      issuedBy: els.colophonIssuedBy.value,
+      publisher: els.colophonPublisher.value,
+      contact: els.colophonContact.value,
+      copyright: els.colophonCopyright.value,
+      notes: els.colophonNotes.value
+    }
+  });
+}
+
+function applyBookMatterToInputs(raw) {
+  const matter = normalizeBookMatter(raw);
+  els.forewordEnabled.checked = matter.foreword.enabled;
+  els.forewordTitle.value = matter.foreword.title;
+  els.forewordPlacement.value = matter.foreword.placement;
+  els.forewordBody.value = matter.foreword.body;
+  els.afterwordEnabled.checked = matter.afterword.enabled;
+  els.afterwordTitle.value = matter.afterword.title;
+  els.afterwordBody.value = matter.afterword.body;
+  els.authorProfileEnabled.checked = matter.authorProfile.enabled;
+  els.authorProfileTitle.value = matter.authorProfile.title;
+  els.authorProfileBody.value = matter.authorProfile.body;
+  els.colophonEnabled.checked = matter.colophon.enabled;
+  els.colophonHeading.value = matter.colophon.heading;
+  els.colophonBookTitle.value = matter.colophon.bookTitle;
+  els.colophonAuthor.value = matter.colophon.author;
+  els.colophonPublicationDate.value = matter.colophon.publicationDate;
+  els.colophonEdition.value = matter.colophon.edition;
+  els.colophonIssuedBy.value = matter.colophon.issuedBy;
+  els.colophonPublisher.value = matter.colophon.publisher;
+  els.colophonContact.value = matter.colophon.contact;
+  els.colophonCopyright.value = matter.colophon.copyright;
+  els.colophonNotes.value = matter.colophon.notes;
+}
+
+function openBookStructureModal() {
+  updateBookStructureUi();
+  openModal('bookStructureModal');
+}
+
+function handleBookStructureChange(event) {
+  if (isApplyingState) return;
+  if (!event.target.closest('input, textarea, select')) return;
+  updateBookStructureUi();
+  markDirty();
+  scheduleRender();
+  scheduleAutosave();
+}
+
+function fillColophonFromBookInfo() {
+  if (!els.colophonBookTitle.value.trim()) els.colophonBookTitle.value = els.titleInput.value.trim();
+  if (!els.colophonAuthor.value.trim()) els.colophonAuthor.value = els.authorInput.value.trim();
+  if (!els.colophonCopyright.value.trim()) {
+    const year = new Date().getFullYear();
+    const author = els.authorInput.value.trim();
+    els.colophonCopyright.value = author ? `© ${year} ${author}` : `© ${year}`;
+  }
+  els.colophonEnabled.checked = true;
+  updateBookStructureUi();
+  markDirty(); scheduleRender(); scheduleAutosave();
+  showToast('書籍情報を奥付へ反映しました。');
+}
+
+function updateBookStructureUi() {
+  if (!els.bookStructureFlow) return;
+  const matter = collectBookMatter();
+  const cards = [
+    ['foreword', matter.foreword.enabled],
+    ['afterword', matter.afterword.enabled],
+    ['authorProfile', matter.authorProfile.enabled],
+    ['colophon', matter.colophon.enabled]
+  ];
+  cards.forEach(([key, enabled]) => {
+    const card = document.querySelector(`[data-matter-card="${key}"]`);
+    const body = document.querySelector(`[data-matter-body="${key}"]`);
+    card?.classList.toggle('active', enabled);
+    if (body) body.setAttribute('aria-hidden', String(!enabled));
+    const status = els[`${key}Status`];
+    if (status) status.textContent = enabled ? '使用中' : '未使用';
+  });
+
+  const items = [];
+  if (els.showDocumentHeading?.checked) items.push({ label: '扉', kind: 'primary' });
+  if (matter.foreword.enabled && matter.foreword.placement !== 'after-toc') items.push({ label: matter.foreword.title || 'まえがき', kind: 'optional' });
+  if (els.showToc?.checked) items.push({ label: els.tocTitle?.value || '目次', kind: 'primary' });
+  if (matter.foreword.enabled && matter.foreword.placement === 'after-toc') items.push({ label: matter.foreword.title || 'まえがき', kind: 'optional' });
+  items.push({ label: '本文', kind: 'primary' });
+  if (matter.afterword.enabled) items.push({ label: matter.afterword.title || 'あとがき', kind: 'optional' });
+  if (matter.authorProfile.enabled) items.push({ label: matter.authorProfile.title || '著者紹介', kind: 'optional' });
+  if (matter.colophon.enabled) items.push({ label: matter.colophon.heading || '奥付', kind: 'optional' });
+
+  els.bookStructureFlow.replaceChildren();
+  items.forEach((item) => {
+    const wrap = document.createElement('span');
+    wrap.className = 'structure-flow-item';
+    const chip = document.createElement('span');
+    chip.className = `structure-chip ${item.kind}`;
+    chip.textContent = item.label;
+    wrap.appendChild(chip);
+    els.bookStructureFlow.appendChild(wrap);
+  });
+  const optionalCount = cards.filter(([, enabled]) => enabled).length;
+  els.bookStructureBadge.textContent = String(optionalCount);
+  els.bookStructureSummary.textContent = `${items.length}区分 ／ 追加ページ ${optionalCount}種類`;
 }
 
 function normalizeMediaAssets(raw) {
