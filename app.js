@@ -1,20 +1,20 @@
 'use strict';
 
-const APP_VERSION = 'v004';
-const SCHEMA_VERSION = 4;
+const APP_VERSION = 'v005';
+const SCHEMA_VERSION = 5;
 const AUTOSAVE_DELAY = 700;
 
-const PROJECT_INDEX_KEY = 'typesetting-app-v004-project-index';
-const PROJECT_PREFIX = 'typesetting-app-v004-project:';
-const CURRENT_PROJECT_KEY = 'typesetting-app-v004-current-project';
-const TEMPLATE_STORAGE_KEY = 'typesetting-app-v004-templates';
+const PROJECT_INDEX_KEY = 'typesetting-app-v005-project-index';
+const PROJECT_PREFIX = 'typesetting-app-v005-project:';
+const CURRENT_PROJECT_KEY = 'typesetting-app-v005-current-project';
+const TEMPLATE_STORAGE_KEY = 'typesetting-app-v005-templates';
 
-const LEGACY_V3_PROJECT_INDEX_KEY = 'typesetting-app-v003-project-index';
-const LEGACY_V3_PROJECT_PREFIX = 'typesetting-app-v003-project:';
-const LEGACY_V3_CURRENT_PROJECT_KEY = 'typesetting-app-v003-current-project';
-const LEGACY_V3_TEMPLATE_STORAGE_KEY = 'typesetting-app-v003-templates';
+const LEGACY_V4_PROJECT_INDEX_KEY = 'typesetting-app-v004-project-index';
+const LEGACY_V4_PROJECT_PREFIX = 'typesetting-app-v004-project:';
+const LEGACY_V4_CURRENT_PROJECT_KEY = 'typesetting-app-v004-current-project';
+const LEGACY_V4_TEMPLATE_STORAGE_KEY = 'typesetting-app-v004-templates';
 const LEGACY_V1_STORAGE_KEY = 'typesetting-app-v001';
-const MIGRATION_MARKER_KEY = 'typesetting-app-v004-migration-complete';
+const MIGRATION_MARKER_KEY = 'typesetting-app-v005-migration-complete';
 
 const DEFAULT_SETTINGS = Object.freeze({
   paperPreset: 'A5',
@@ -28,6 +28,7 @@ const DEFAULT_SETTINGS = Object.freeze({
   fontSize: 9,
   lineHeight: 15,
   letterSpacing: 0.02,
+  useTextIndent: true,
   textIndent: 1,
   textAlign: 'justify',
   preserveBlankLines: true,
@@ -44,13 +45,13 @@ const DEFAULT_SETTINGS = Object.freeze({
 
 const SAMPLE_MANUSCRIPT = Object.freeze({
   title: 'サンプルタイトル',
-  subtitle: '改行・空行保持の確認用原稿',
+  subtitle: '字下げ・改行・空行保持の確認用原稿',
   author: '著者名',
-  body: `これは、組版アプリv004の動作確認用原稿です。
+  body: `これは、組版アプリv005の動作確認用原稿です。
 
 右側の設定を変更すると、用紙サイズ、余白、フォント、文字サイズ、文字間、行間が中央のプレビューへ自動反映されます。本文は空行ごとに段落として扱われ、ページ内に収まらない場合は自動的に次のページへ送られます。
 
-v004では、本文中の手動改行と空行の数を保ったまま組版します。次の文章までに空行を2行入れているため、プレビューでも同じ間隔が表示されます。
+v005では、本文中の手動改行と空行の数を保ったまま組版し、段落先頭の字下げも全体・段落単位で切り替えられます。次の文章までに空行を2行入れているため、プレビューでも同じ間隔が表示されます。
 
 
 中央プレビューの本文段落をクリックすると、その段落だけ文字サイズ、行間、文字間、揃え、前後余白などを調整できます。
@@ -61,7 +62,7 @@ JSON出力は、バックアップや別端末への移動に使用してくだ�
 });
 
 const DEFAULT_STATE = Object.freeze({
-  projectName: '組版アプリ v004 サンプル',
+  projectName: '組版アプリ v005 サンプル',
   manuscript: { ...SAMPLE_MANUSCRIPT, paragraphs: [] },
   paragraphOverrides: {},
   settings: DEFAULT_SETTINGS,
@@ -136,6 +137,7 @@ function init() {
   updateCharCount();
   applyViewSettings();
   updateBlankLineControls();
+  updateTextIndentControls();
   scheduleRender();
   refreshCurrentProjectStatus();
 }
@@ -147,7 +149,7 @@ function cacheElements() {
     'authorInput', 'bodyInput', 'charCount', 'pages', 'pageCount', 'saveStatus',
     'currentProjectStatus', 'paperPreset', 'pageWidth', 'pageHeight', 'marginTop',
     'marginBottom', 'marginLeft', 'marginRight', 'fontFamily', 'fontSize', 'lineHeight',
-    'letterSpacing', 'textIndent', 'textAlign', 'preserveBlankLines', 'blankLineScale', 'titleSize', 'titleBottom', 'titleAlign',
+    'letterSpacing', 'useTextIndent', 'textIndent', 'textAlign', 'preserveBlankLines', 'blankLineScale', 'titleSize', 'titleBottom', 'titleAlign',
     'showPageNumbers', 'firstPageNumber', 'viewMode', 'zoomSelect', 'toggleGuidesBtn',
     'resetSettingsBtn', 'measureRoot', 'toast', 'previewViewport', 'projectsModal',
     'projectList', 'projectStorageSummary', 'createProjectFromModalBtn', 'templatesModal',
@@ -155,7 +157,7 @@ function cacheElements() {
     'paragraphEmptyState', 'paragraphControls', 'selectedParagraphLabel',
     'selectedParagraphExcerpt', 'previousParagraphBtn', 'nextParagraphBtn',
     'paragraphFontSize', 'paragraphLineHeight', 'paragraphLetterSpacing',
-    'paragraphSpaceBefore', 'paragraphSpaceAfter', 'paragraphTextAlign',
+    'paragraphSpaceBefore', 'paragraphSpaceAfter', 'paragraphTextAlign', 'paragraphTextIndent',
     'paragraphPageBreakBefore', 'paragraphKeepWithNext', 'resetParagraphBtn'
   ];
 
@@ -169,7 +171,7 @@ function bindEvents() {
     els.projectName, els.titleInput, els.subtitleInput, els.authorInput,
     els.pageWidth, els.pageHeight, els.marginTop, els.marginBottom, els.marginLeft,
     els.marginRight, els.fontFamily, els.fontSize, els.lineHeight, els.letterSpacing,
-    els.textIndent, els.textAlign, els.preserveBlankLines, els.blankLineScale,
+    els.useTextIndent, els.textIndent, els.textAlign, els.preserveBlankLines, els.blankLineScale,
     els.titleSize, els.titleBottom, els.titleAlign,
     els.showPageNumbers, els.firstPageNumber
   ];
@@ -198,6 +200,7 @@ function bindEvents() {
   els.viewMode.addEventListener('change', handleViewSettingChange);
   els.zoomSelect.addEventListener('change', handleViewSettingChange);
   els.preserveBlankLines.addEventListener('change', updateBlankLineControls);
+  els.useTextIndent.addEventListener('change', updateTextIndentControls);
 
   els.toggleGuidesBtn.addEventListener('click', () => {
     const pressed = els.toggleGuidesBtn.getAttribute('aria-pressed') === 'true';
@@ -218,6 +221,7 @@ function bindEvents() {
     els.paragraphSpaceBefore, els.paragraphSpaceAfter
   ].forEach((input) => input.addEventListener('input', updateSelectedParagraphOverride));
   els.paragraphTextAlign.addEventListener('change', updateSelectedParagraphOverride);
+  els.paragraphTextIndent.addEventListener('change', updateSelectedParagraphOverride);
   els.paragraphPageBreakBefore.addEventListener('change', updateSelectedParagraphOverride);
   els.paragraphKeepWithNext.addEventListener('change', updateSelectedParagraphOverride);
   els.resetParagraphBtn.addEventListener('click', resetSelectedParagraphOverride);
@@ -296,7 +300,7 @@ function loadInitialProject() {
     applyState(migrated);
     saveCurrentProject(false);
     updateSaveStatus('v001データを移行済み');
-    showToast('v001の保存データをv004へ移行しました。');
+    showToast('v001の保存データをv005へ移行しました。');
     return;
   }
 
@@ -316,15 +320,15 @@ function migrateLegacyData() {
     return;
   }
 
-  const legacyIndex = readJsonFromStorage(LEGACY_V3_PROJECT_INDEX_KEY, []);
+  const legacyIndex = readJsonFromStorage(LEGACY_V4_PROJECT_INDEX_KEY, []);
   let migratedCount = 0;
   let mappedCurrentId = null;
-  const legacyCurrentId = safeStorageGet(LEGACY_V3_CURRENT_PROJECT_KEY);
+  const legacyCurrentId = safeStorageGet(LEGACY_V4_CURRENT_PROJECT_KEY);
 
   if (Array.isArray(legacyIndex)) {
     legacyIndex.forEach((item) => {
       if (!item?.id) return;
-      const raw = readJsonFromStorage(`${LEGACY_V3_PROJECT_PREFIX}${item.id}`, null);
+      const raw = readJsonFromStorage(`${LEGACY_V4_PROJECT_PREFIX}${item.id}`, null);
       if (!raw) return;
       const state = normalizeState(raw);
       state.metadata.appVersion = APP_VERSION;
@@ -338,7 +342,7 @@ function migrateLegacyData() {
     });
   }
 
-  const legacyTemplates = readJsonFromStorage(LEGACY_V3_TEMPLATE_STORAGE_KEY, []);
+  const legacyTemplates = readJsonFromStorage(LEGACY_V4_TEMPLATE_STORAGE_KEY, []);
   if (Array.isArray(legacyTemplates) && legacyTemplates.length) {
     safeStorageSet(TEMPLATE_STORAGE_KEY, JSON.stringify(legacyTemplates));
   }
@@ -347,13 +351,18 @@ function migrateLegacyData() {
   safeStorageSet(MIGRATION_MARKER_KEY, 'true');
 
   if (migratedCount > 0) {
-    showToast(`v003のプロジェクト${migratedCount}件をv004へ移行しました。`);
+    showToast(`v004のプロジェクト${migratedCount}件をv005へ移行しました。`);
   }
 }
 
 function updateBlankLineControls() {
   if (!els.blankLineScale || !els.preserveBlankLines) return;
   els.blankLineScale.disabled = !els.preserveBlankLines.checked;
+}
+
+function updateTextIndentControls() {
+  if (!els.textIndent || !els.useTextIndent) return;
+  els.textIndent.disabled = !els.useTextIndent.checked;
 }
 
 function handlePresetChange() {
@@ -716,6 +725,7 @@ function applyParagraphOverrideStyles(
   if (Number.isFinite(normalized.lineHeight)) paragraph.style.lineHeight = `${normalized.lineHeight}pt`;
   if (Number.isFinite(normalized.letterSpacing)) paragraph.style.letterSpacing = `${normalized.letterSpacing}em`;
   if (normalized.textAlign && normalized.textAlign !== 'inherit') paragraph.style.textAlign = normalized.textAlign;
+  if (!continuation && Number.isFinite(normalized.textIndent)) paragraph.style.textIndent = `${normalized.textIndent}em`;
 
   if (!continuation) {
     const beforeParts = [];
@@ -867,7 +877,8 @@ function applyCssVariables(settings) {
   root.style.setProperty('--body-size', `${settings.fontSize}pt`);
   root.style.setProperty('--body-leading', `${settings.lineHeight}pt`);
   root.style.setProperty('--body-tracking', `${settings.letterSpacing}em`);
-  root.style.setProperty('--body-indent', `${settings.textIndent}em`);
+  const bodyIndent = settings.useTextIndent ? sanitizeNumber(settings.textIndent, 1) : 0;
+  root.style.setProperty('--body-indent', `${bodyIndent}em`);
   root.style.setProperty('--body-align', settings.textAlign);
   root.style.setProperty('--title-size', `${settings.titleSize}pt`);
   root.style.setProperty('--title-align', settings.titleAlign);
@@ -937,6 +948,7 @@ function collectSettings() {
     fontSize: sanitizeNumber(els.fontSize.value, 9),
     lineHeight: sanitizeNumber(els.lineHeight.value, 15),
     letterSpacing: sanitizeNumber(els.letterSpacing.value, 0.02),
+    useTextIndent: els.useTextIndent.checked,
     textIndent: sanitizeNumber(els.textIndent.value, 1),
     textAlign: els.textAlign.value,
     preserveBlankLines: els.preserveBlankLines.checked,
@@ -989,7 +1001,9 @@ function applySettingsToInputs(settings) {
   els.fontSize.value = normalized.fontSize;
   els.lineHeight.value = normalized.lineHeight;
   els.letterSpacing.value = normalized.letterSpacing;
+  els.useTextIndent.checked = Boolean(normalized.useTextIndent);
   els.textIndent.value = normalized.textIndent;
+  updateTextIndentControls();
   els.textAlign.value = normalized.textAlign;
   els.preserveBlankLines.checked = Boolean(normalized.preserveBlankLines);
   els.blankLineScale.value = normalized.blankLineScale;
@@ -1031,11 +1045,16 @@ function normalizeState(raw) {
   manuscript.trailingBlankLines = parsedBody.trailingBlankLines;
   const validIds = new Set(manuscript.paragraphs.map((record) => record.id));
 
+  const normalizedSettings = { ...base.settings, ...(source.settings || {}) };
+  if (!source.settings || source.settings.useTextIndent === undefined) {
+    normalizedSettings.useTextIndent = sanitizeNumber(normalizedSettings.textIndent, 1) > 0;
+  }
+
   return {
     projectName: typeof source.projectName === 'string' ? source.projectName : base.projectName,
     manuscript,
     paragraphOverrides: normalizeParagraphOverrides(source.paragraphOverrides, validIds),
-    settings: { ...base.settings, ...(source.settings || {}) },
+    settings: normalizedSettings,
     metadata: {
       ...base.metadata,
       ...(source.metadata || {}),
@@ -1152,7 +1171,7 @@ function normalizeParagraphOverrides(raw, validIds = null) {
 function normalizeParagraphOverride(raw) {
   const source = raw && typeof raw === 'object' ? raw : {};
   const normalized = {};
-  ['fontSize', 'lineHeight', 'letterSpacing', 'spaceBefore', 'spaceAfter'].forEach((key) => {
+  ['fontSize', 'lineHeight', 'letterSpacing', 'textIndent', 'spaceBefore', 'spaceAfter'].forEach((key) => {
     const value = Number(source[key]);
     if (source[key] !== '' && source[key] !== null && source[key] !== undefined && Number.isFinite(value)) {
       normalized[key] = value;
@@ -1216,6 +1235,7 @@ function updateParagraphControls() {
     els.paragraphSpaceBefore.value = Number.isFinite(override.spaceBefore) ? String(override.spaceBefore) : '';
     els.paragraphSpaceAfter.value = Number.isFinite(override.spaceAfter) ? String(override.spaceAfter) : '';
     els.paragraphTextAlign.value = override.textAlign || 'inherit';
+    els.paragraphTextIndent.value = Number.isFinite(override.textIndent) ? String(override.textIndent) : 'inherit';
     els.paragraphPageBreakBefore.checked = Boolean(override.pageBreakBefore);
     els.paragraphKeepWithNext.checked = Boolean(override.keepWithNext);
     els.previousParagraphBtn.disabled = index === 0;
@@ -1235,6 +1255,7 @@ function updateSelectedParagraphOverride() {
   setOptionalNumber(override, 'spaceBefore', els.paragraphSpaceBefore.value);
   setOptionalNumber(override, 'spaceAfter', els.paragraphSpaceAfter.value);
   if (els.paragraphTextAlign.value !== 'inherit') override.textAlign = els.paragraphTextAlign.value;
+  if (els.paragraphTextIndent.value !== 'inherit') override.textIndent = Number(els.paragraphTextIndent.value);
   if (els.paragraphPageBreakBefore.checked) override.pageBreakBefore = true;
   if (els.paragraphKeepWithNext.checked) override.keepWithNext = true;
 
@@ -1616,7 +1637,8 @@ function describeTemplate(settings) {
   const paper = settings.paperPreset === 'custom'
     ? `${settings.pageWidth} × ${settings.pageHeight} mm`
     : `${settings.paperPreset}（${settings.pageWidth} × ${settings.pageHeight} mm）`;
-  return `${paper} ／ ${settings.fontSize}pt・行間${settings.lineHeight}pt ／ 余白 上${settings.marginTop} 下${settings.marginBottom} 左${settings.marginLeft} 右${settings.marginRight}mm`;
+  const indentLabel = settings.useTextIndent ? `字下げ${settings.textIndent}字` : '字下げなし';
+  return `${paper} ／ ${settings.fontSize}pt・行間${settings.lineHeight}pt・${indentLabel} ／ 余白 上${settings.marginTop} 下${settings.marginBottom} 左${settings.marginLeft} 右${settings.marginRight}mm`;
 }
 
 function exportJson() {
