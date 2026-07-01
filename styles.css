@@ -990,3 +990,71 @@ body.modal-open {
   flex: 0 0 auto;
   pointer-events: none;
 }
+
+/* v006: Markdown-style body headings */
+.body-heading {
+  margin: 0;
+  break-inside: avoid;
+  font-weight: 700;
+  letter-spacing: 0.035em;
+  text-indent: 0;
+  overflow-wrap: anywhere;
+}
+
+.body-heading.heading-level-1 {
+  border-bottom: 0.35mm solid currentColor;
+}
+
+.body-heading.heading-level-2 {
+  border-left: 1.2mm solid currentColor;
+  padding-left: 3mm;
+}
+
+.body-heading.heading-level-3 {
+  letter-spacing: 0.025em;
+}
+
+.heading-syntax-note {
+  margin: 0 0 12px;
+  line-height: 1.8;
+}
+
+.heading-syntax-note code {
+  display: inline-block;
+  padding: 2px 5px;
+  color: #31574c;
+  background: #edf4f1;
+  border: 1px solid #d3e2dc;
+  border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 10px;
+}
+
+.heading-setting-card {
+  margin-top: 12px;
+  padding: 12px;
+  background: #f8fafb;
+  border: 1px solid #e0e5e9;
+  border-radius: 8px;
+}
+
+.heading-setting-card:first-of-type {
+  margin-top: 0;
+}
+
+.heading-setting-card h3 {
+  margin: 0 0 12px;
+  color: #33464e;
+  font-size: 12px;
+}
+
+.heading-setting-card .check-row:last-child,
+.heading-setting-card .field:last-child {
+  margin-bottom: 0;
+}
+
+@media print {
+  .body-heading {
+    box-shadow: none !important;
+  }
+}

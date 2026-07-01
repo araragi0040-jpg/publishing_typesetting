@@ -1,20 +1,20 @@
 'use strict';
 
-const APP_VERSION = 'v005';
-const SCHEMA_VERSION = 5;
+const APP_VERSION = 'v006';
+const SCHEMA_VERSION = 6;
 const AUTOSAVE_DELAY = 700;
 
-const PROJECT_INDEX_KEY = 'typesetting-app-v005-project-index';
-const PROJECT_PREFIX = 'typesetting-app-v005-project:';
-const CURRENT_PROJECT_KEY = 'typesetting-app-v005-current-project';
-const TEMPLATE_STORAGE_KEY = 'typesetting-app-v005-templates';
+const PROJECT_INDEX_KEY = 'typesetting-app-v006-project-index';
+const PROJECT_PREFIX = 'typesetting-app-v006-project:';
+const CURRENT_PROJECT_KEY = 'typesetting-app-v006-current-project';
+const TEMPLATE_STORAGE_KEY = 'typesetting-app-v006-templates';
 
-const LEGACY_V4_PROJECT_INDEX_KEY = 'typesetting-app-v004-project-index';
-const LEGACY_V4_PROJECT_PREFIX = 'typesetting-app-v004-project:';
-const LEGACY_V4_CURRENT_PROJECT_KEY = 'typesetting-app-v004-current-project';
-const LEGACY_V4_TEMPLATE_STORAGE_KEY = 'typesetting-app-v004-templates';
+const LEGACY_V5_PROJECT_INDEX_KEY = 'typesetting-app-v005-project-index';
+const LEGACY_V5_PROJECT_PREFIX = 'typesetting-app-v005-project:';
+const LEGACY_V5_CURRENT_PROJECT_KEY = 'typesetting-app-v005-current-project';
+const LEGACY_V5_TEMPLATE_STORAGE_KEY = 'typesetting-app-v005-templates';
 const LEGACY_V1_STORAGE_KEY = 'typesetting-app-v001';
-const MIGRATION_MARKER_KEY = 'typesetting-app-v005-migration-complete';
+const MIGRATION_MARKER_KEY = 'typesetting-app-v006-migration-complete';
 
 const DEFAULT_SETTINGS = Object.freeze({
   paperPreset: 'A5',
@@ -36,6 +36,29 @@ const DEFAULT_SETTINGS = Object.freeze({
   titleSize: 20,
   titleBottom: 14,
   titleAlign: 'center',
+  showDocumentHeading: true,
+  bodyStartOnNewPage: false,
+  heading1FontFamily: "'Noto Serif JP', 'Yu Mincho', 'Hiragino Mincho ProN', serif",
+  heading1Size: 16,
+  heading1Align: 'left',
+  heading1SpaceBefore: 10,
+  heading1SpaceAfter: 5,
+  heading1PageBreakBefore: true,
+  heading1KeepWithNext: true,
+  heading2FontFamily: "'Noto Sans JP', 'Yu Gothic', 'Hiragino Kaku Gothic ProN', sans-serif",
+  heading2Size: 13,
+  heading2Align: 'left',
+  heading2SpaceBefore: 7,
+  heading2SpaceAfter: 3,
+  heading2PageBreakBefore: false,
+  heading2KeepWithNext: true,
+  heading3FontFamily: "'Noto Sans JP', 'Yu Gothic', 'Hiragino Kaku Gothic ProN', sans-serif",
+  heading3Size: 11,
+  heading3Align: 'left',
+  heading3SpaceBefore: 5,
+  heading3SpaceAfter: 2,
+  heading3PageBreakBefore: false,
+  heading3KeepWithNext: true,
   showPageNumbers: true,
   firstPageNumber: false,
   viewMode: 'single',
@@ -45,16 +68,23 @@ const DEFAULT_SETTINGS = Object.freeze({
 
 const SAMPLE_MANUSCRIPT = Object.freeze({
   title: 'サンプルタイトル',
-  subtitle: '字下げ・改行・空行保持の確認用原稿',
+  subtitle: '見出し・字下げ・空行保持の確認用原稿',
   author: '著者名',
-  body: `これは、組版アプリv005の動作確認用原稿です。
+  body: `# 第1章　組版アプリv006
 
-右側の設定を変更すると、用紙サイズ、余白、フォント、文字サイズ、文字間、行間が中央のプレビューへ自動反映されます。本文は空行ごとに段落として扱われ、ページ内に収まらない場合は自動的に次のページへ送られます。
+これは、組版アプリv006の動作確認用原稿です。
 
-v005では、本文中の手動改行と空行の数を保ったまま組版し、段落先頭の字下げも全体・段落単位で切り替えられます。次の文章までに空行を2行入れているため、プレビューでも同じ間隔が表示されます。
+右側の設定を変更すると、用紙サイズ、余白、フォント、文字サイズ、文字間、行間が中央のプレビューへ自動反映されます。
 
+## 見出しの入力方法
 
-中央プレビューの本文段落をクリックすると、その段落だけ文字サイズ、行間、文字間、揃え、前後余白などを調整できます。
+本文内で行頭に「# 」「## 」「### 」を付けると、大見出し・中見出し・小見出しとして自動認識します。見出し記号と文字の間には半角スペースを入れてください。
+
+### 段落単位の調整
+
+中央プレビューの本文段落をクリックすると、その段落だけ文字サイズ、行間、文字間、揃え、字下げ、前後余白などを調整できます。
+
+# 第2章　保存と出力
 
 強制改ページや「次の段落と同じページに置く」設定にも対応しています。個別設定を解除すると、本文全体の組版設定へ戻ります。
 
@@ -62,7 +92,7 @@ JSON出力は、バックアップや別端末への移動に使用してくだ�
 });
 
 const DEFAULT_STATE = Object.freeze({
-  projectName: '組版アプリ v005 サンプル',
+  projectName: '組版アプリ v006 サンプル',
   manuscript: { ...SAMPLE_MANUSCRIPT, paragraphs: [] },
   paragraphOverrides: {},
   settings: DEFAULT_SETTINGS,
@@ -149,7 +179,7 @@ function cacheElements() {
     'authorInput', 'bodyInput', 'charCount', 'pages', 'pageCount', 'saveStatus',
     'currentProjectStatus', 'paperPreset', 'pageWidth', 'pageHeight', 'marginTop',
     'marginBottom', 'marginLeft', 'marginRight', 'fontFamily', 'fontSize', 'lineHeight',
-    'letterSpacing', 'useTextIndent', 'textIndent', 'textAlign', 'preserveBlankLines', 'blankLineScale', 'titleSize', 'titleBottom', 'titleAlign',
+    'letterSpacing', 'useTextIndent', 'textIndent', 'textAlign', 'preserveBlankLines', 'blankLineScale', 'titleSize', 'titleBottom', 'titleAlign', 'showDocumentHeading', 'bodyStartOnNewPage',
     'showPageNumbers', 'firstPageNumber', 'viewMode', 'zoomSelect', 'toggleGuidesBtn',
     'resetSettingsBtn', 'measureRoot', 'toast', 'previewViewport', 'projectsModal',
     'projectList', 'projectStorageSummary', 'createProjectFromModalBtn', 'templatesModal',
@@ -158,7 +188,13 @@ function cacheElements() {
     'selectedParagraphExcerpt', 'previousParagraphBtn', 'nextParagraphBtn',
     'paragraphFontSize', 'paragraphLineHeight', 'paragraphLetterSpacing',
     'paragraphSpaceBefore', 'paragraphSpaceAfter', 'paragraphTextAlign', 'paragraphTextIndent',
-    'paragraphPageBreakBefore', 'paragraphKeepWithNext', 'resetParagraphBtn'
+    'paragraphPageBreakBefore', 'paragraphKeepWithNext', 'resetParagraphBtn',
+    'heading1FontFamily', 'heading1Size', 'heading1Align', 'heading1SpaceBefore',
+    'heading1SpaceAfter', 'heading1PageBreakBefore', 'heading1KeepWithNext',
+    'heading2FontFamily', 'heading2Size', 'heading2Align', 'heading2SpaceBefore',
+    'heading2SpaceAfter', 'heading2PageBreakBefore', 'heading2KeepWithNext',
+    'heading3FontFamily', 'heading3Size', 'heading3Align', 'heading3SpaceBefore',
+    'heading3SpaceAfter', 'heading3PageBreakBefore', 'heading3KeepWithNext'
   ];
 
   ids.forEach((id) => {
@@ -172,7 +208,13 @@ function bindEvents() {
     els.pageWidth, els.pageHeight, els.marginTop, els.marginBottom, els.marginLeft,
     els.marginRight, els.fontFamily, els.fontSize, els.lineHeight, els.letterSpacing,
     els.useTextIndent, els.textIndent, els.textAlign, els.preserveBlankLines, els.blankLineScale,
-    els.titleSize, els.titleBottom, els.titleAlign,
+    els.titleSize, els.titleBottom, els.titleAlign, els.showDocumentHeading, els.bodyStartOnNewPage,
+    els.heading1FontFamily, els.heading1Size, els.heading1Align, els.heading1SpaceBefore,
+    els.heading1SpaceAfter, els.heading1PageBreakBefore, els.heading1KeepWithNext,
+    els.heading2FontFamily, els.heading2Size, els.heading2Align, els.heading2SpaceBefore,
+    els.heading2SpaceAfter, els.heading2PageBreakBefore, els.heading2KeepWithNext,
+    els.heading3FontFamily, els.heading3Size, els.heading3Align, els.heading3SpaceBefore,
+    els.heading3SpaceAfter, els.heading3PageBreakBefore, els.heading3KeepWithNext,
     els.showPageNumbers, els.firstPageNumber
   ];
 
@@ -300,7 +342,7 @@ function loadInitialProject() {
     applyState(migrated);
     saveCurrentProject(false);
     updateSaveStatus('v001データを移行済み');
-    showToast('v001の保存データをv005へ移行しました。');
+    showToast('v001の保存データをv006へ移行しました。');
     return;
   }
 
@@ -320,15 +362,15 @@ function migrateLegacyData() {
     return;
   }
 
-  const legacyIndex = readJsonFromStorage(LEGACY_V4_PROJECT_INDEX_KEY, []);
+  const legacyIndex = readJsonFromStorage(LEGACY_V5_PROJECT_INDEX_KEY, []);
   let migratedCount = 0;
   let mappedCurrentId = null;
-  const legacyCurrentId = safeStorageGet(LEGACY_V4_CURRENT_PROJECT_KEY);
+  const legacyCurrentId = safeStorageGet(LEGACY_V5_CURRENT_PROJECT_KEY);
 
   if (Array.isArray(legacyIndex)) {
     legacyIndex.forEach((item) => {
       if (!item?.id) return;
-      const raw = readJsonFromStorage(`${LEGACY_V4_PROJECT_PREFIX}${item.id}`, null);
+      const raw = readJsonFromStorage(`${LEGACY_V5_PROJECT_PREFIX}${item.id}`, null);
       if (!raw) return;
       const state = normalizeState(raw);
       state.metadata.appVersion = APP_VERSION;
@@ -342,7 +384,7 @@ function migrateLegacyData() {
     });
   }
 
-  const legacyTemplates = readJsonFromStorage(LEGACY_V4_TEMPLATE_STORAGE_KEY, []);
+  const legacyTemplates = readJsonFromStorage(LEGACY_V5_TEMPLATE_STORAGE_KEY, []);
   if (Array.isArray(legacyTemplates) && legacyTemplates.length) {
     safeStorageSet(TEMPLATE_STORAGE_KEY, JSON.stringify(legacyTemplates));
   }
@@ -351,7 +393,7 @@ function migrateLegacyData() {
   safeStorageSet(MIGRATION_MARKER_KEY, 'true');
 
   if (migratedCount > 0) {
-    showToast(`v004のプロジェクト${migratedCount}件をv005へ移行しました。`);
+    showToast(`v005のプロジェクト${migratedCount}件をv006へ移行しました。`);
   }
 }
 
@@ -423,28 +465,85 @@ function paginate(state) {
   const pages = [[]];
   let pageIndex = 0;
 
-  const heading = createHeadingElement(state.manuscript);
+  const heading = state.settings.showDocumentHeading ? createHeadingElement(state.manuscript) : null;
   if (heading) {
     content.appendChild(heading.cloneNode(true));
     pages[pageIndex].push({ type: 'heading', data: state.manuscript });
   }
 
-  const paragraphs = Array.isArray(state.manuscript.paragraphs)
+  const records = Array.isArray(state.manuscript.paragraphs)
     ? state.manuscript.paragraphs
     : createParagraphRecords(state.manuscript.body);
 
-  paragraphs.forEach((record, paragraphIndex) => {
+  if (heading && state.settings.bodyStartOnNewPage && records.length) startNewPage();
+
+  records.forEach((record, recordIndex) => {
+    if (record.type === 'heading') {
+      appendBodyHeading(record, recordIndex);
+      return;
+    }
+    appendBodyParagraph(record, recordIndex);
+  });
+
+  const finalBlankLines = state.settings.preserveBlankLines
+    ? sanitizeBlankLineCount(state.manuscript.trailingBlankLines)
+    : 0;
+  if (finalBlankLines > 0) {
+    const spacer = createBlankSpaceElement(finalBlankLines, state.settings);
+    content.appendChild(spacer);
+    if (!fits(content) && content.childElementCount > 1) {
+      spacer.remove();
+      startNewPage();
+      content.appendChild(spacer);
+    }
+    pages[pageIndex].push({ type: 'blank-space', lines: finalBlankLines });
+  }
+
+  if (pages.length > 1 && pages[pages.length - 1].length === 0) pages.pop();
+  root.remove();
+  return pages.length ? pages : [[]];
+
+  function appendBodyHeading(record, recordIndex) {
+    const headingSettings = getBodyHeadingSettings(record.level, state.settings);
+    const blankLinesBefore = state.settings.preserveBlankLines
+      ? sanitizeBlankLineCount(record.blankLinesBefore)
+      : 0;
+    const nextRecord = records[recordIndex + 1] || null;
+
+    if (headingSettings.pageBreakBefore && content.childElementCount > 0) startNewPage();
+
+    if (headingSettings.keepWithNext && nextRecord && content.childElementCount > 0) {
+      const headingProbe = createBodyHeadingElement(record, state.settings, { blankLinesBefore });
+      const nextProbe = createKeepWithNextProbe(nextRecord, state);
+      content.append(headingProbe, nextProbe);
+      const pairFits = fits(content);
+      headingProbe.remove();
+      nextProbe.remove();
+      if (!pairFits) startNewPage();
+    }
+
+    const element = createBodyHeadingElement(record, state.settings, { blankLinesBefore });
+    content.appendChild(element);
+    if (!fits(content) && content.childElementCount > 1) {
+      element.remove();
+      startNewPage();
+      content.appendChild(element);
+    }
+
+    pages[pageIndex].push({
+      type: 'body-heading',
+      record: deepClone(record),
+      recordIndex,
+      blankLinesBefore
+    });
+  }
+
+  function appendBodyParagraph(record, recordIndex) {
     const override = normalizeParagraphOverride(state.paragraphOverrides?.[record.id]);
     const blankLinesBefore = state.settings.preserveBlankLines
       ? sanitizeBlankLineCount(record.blankLinesBefore)
       : 0;
-    const nextRecord = paragraphs[paragraphIndex + 1] || null;
-    const nextOverride = nextRecord
-      ? normalizeParagraphOverride(state.paragraphOverrides?.[nextRecord.id])
-      : null;
-    const nextBlankLinesBefore = nextRecord && state.settings.preserveBlankLines
-      ? sanitizeBlankLineCount(nextRecord.blankLinesBefore)
-      : 0;
+    const nextRecord = records[recordIndex + 1] || null;
 
     if (override.pageBreakBefore && content.childElementCount > 0) startNewPage();
 
@@ -455,12 +554,7 @@ function paginate(state) {
         settings: state.settings,
         isFinal: true
       });
-      const nextProbe = createParagraphElement(nextRecord.text, {
-        override: nextOverride,
-        blankLinesBefore: nextBlankLinesBefore,
-        settings: state.settings,
-        isFinal: true
-      });
+      const nextProbe = createKeepWithNextProbe(nextRecord, state);
       content.append(currentProbe, nextProbe);
       const pairFits = fits(content);
       currentProbe.remove();
@@ -489,7 +583,7 @@ function paginate(state) {
           continuation: isContinuation,
           isFinal: true,
           paragraphId: record.id,
-          paragraphIndex,
+          paragraphIndex: getEditableParagraphIndex(record.id),
           blankLinesBefore: fragmentBlankLines,
           override
         });
@@ -530,7 +624,7 @@ function paginate(state) {
           continuation: isContinuation,
           isFinal,
           paragraphId: record.id,
-          paragraphIndex,
+          paragraphIndex: getEditableParagraphIndex(record.id),
           blankLinesBefore: fragmentBlankLines,
           override
         });
@@ -556,7 +650,7 @@ function paginate(state) {
           continuation: isContinuation,
           isFinal: false,
           paragraphId: record.id,
-          paragraphIndex,
+          paragraphIndex: getEditableParagraphIndex(record.id),
           blankLinesBefore: fragmentBlankLines,
           override
         });
@@ -566,25 +660,7 @@ function paginate(state) {
 
       startNewPage();
     }
-  });
-
-  const finalBlankLines = state.settings.preserveBlankLines
-    ? sanitizeBlankLineCount(state.manuscript.trailingBlankLines)
-    : 0;
-  if (finalBlankLines > 0) {
-    const spacer = createBlankSpaceElement(finalBlankLines, state.settings);
-    content.appendChild(spacer);
-    if (!fits(content) && content.childElementCount > 1) {
-      spacer.remove();
-      startNewPage();
-      content.appendChild(spacer);
-    }
-    pages[pageIndex].push({ type: 'blank-space', lines: finalBlankLines });
   }
-
-  if (pages.length > 1 && pages[pages.length - 1].length === 0) pages.pop();
-  root.remove();
-  return pages.length ? pages : [[]];
 
   function startNewPage() {
     pageIndex += 1;
@@ -673,6 +749,82 @@ function createHeadingElement(manuscript) {
     wrap.appendChild(author);
   }
   return wrap;
+}
+
+function getEditableParagraphRecords() {
+  return paragraphRecords.filter((record) => record.type !== 'heading');
+}
+
+function getEditableParagraphIndex(paragraphId) {
+  return getEditableParagraphRecords().findIndex((record) => record.id === paragraphId);
+}
+
+function getBodyHeadingSettings(level, settings = DEFAULT_SETTINGS) {
+  const safeLevel = Math.min(3, Math.max(1, Number(level) || 1));
+  const source = { ...DEFAULT_SETTINGS, ...(settings || {}) };
+  return {
+    level: safeLevel,
+    fontFamily: source[`heading${safeLevel}FontFamily`] || source.fontFamily,
+    size: sanitizeNumber(source[`heading${safeLevel}Size`], safeLevel === 1 ? 16 : safeLevel === 2 ? 13 : 11),
+    align: ['left', 'center', 'right'].includes(source[`heading${safeLevel}Align`])
+      ? source[`heading${safeLevel}Align`]
+      : 'left',
+    spaceBefore: Math.max(0, sanitizeNumber(source[`heading${safeLevel}SpaceBefore`], 0)),
+    spaceAfter: Math.max(0, sanitizeNumber(source[`heading${safeLevel}SpaceAfter`], 0)),
+    pageBreakBefore: Boolean(source[`heading${safeLevel}PageBreakBefore`]),
+    keepWithNext: Boolean(source[`heading${safeLevel}KeepWithNext`])
+  };
+}
+
+function createBodyHeadingElement(record, settings = DEFAULT_SETTINGS, options = {}) {
+  const headingSettings = getBodyHeadingSettings(record.level, settings);
+  const tagName = headingSettings.level === 1 ? 'h2' : headingSettings.level === 2 ? 'h3' : 'h4';
+  const heading = document.createElement(tagName);
+  heading.className = `body-heading heading-level-${headingSettings.level}`;
+  heading.textContent = record.text;
+  heading.dataset.headingLevel = String(headingSettings.level);
+  if (record.id) heading.dataset.blockId = record.id;
+  heading.style.fontFamily = headingSettings.fontFamily;
+  heading.style.fontSize = `${headingSettings.size}pt`;
+  heading.style.lineHeight = headingSettings.level === 1 ? '1.45' : '1.5';
+  heading.style.textAlign = headingSettings.align;
+
+  const effectiveSettings = { ...DEFAULT_SETTINGS, ...(settings || {}) };
+  const blankCount = effectiveSettings.preserveBlankLines
+    ? sanitizeBlankLineCount(options.blankLinesBefore ?? record.blankLinesBefore)
+    : 0;
+  const blankSpace = blankCount
+    * sanitizeNumber(effectiveSettings.lineHeight, 15)
+    * Math.max(0, sanitizeNumber(effectiveSettings.blankLineScale, 1));
+  const beforeParts = [];
+  if (blankSpace > 0) beforeParts.push(`${blankSpace}pt`);
+  if (headingSettings.spaceBefore > 0) beforeParts.push(`${headingSettings.spaceBefore}mm`);
+  if (beforeParts.length === 1) heading.style.paddingTop = beforeParts[0];
+  if (beforeParts.length > 1) heading.style.paddingTop = `calc(${beforeParts.join(' + ')})`;
+  if (headingSettings.spaceAfter > 0) heading.style.paddingBottom = `${headingSettings.spaceAfter}mm`;
+
+  return heading;
+}
+
+function createKeepWithNextProbe(record, state) {
+  if (record.type === 'heading') {
+    return createBodyHeadingElement(record, state.settings, {
+      blankLinesBefore: state.settings.preserveBlankLines
+        ? sanitizeBlankLineCount(record.blankLinesBefore)
+        : 0
+    });
+  }
+
+  const override = normalizeParagraphOverride(state.paragraphOverrides?.[record.id]);
+  const excerpt = String(record.text || '').replace(/\n+/g, ' ').slice(0, 12) || '　';
+  return createParagraphElement(excerpt, {
+    override,
+    blankLinesBefore: state.settings.preserveBlankLines
+      ? sanitizeBlankLineCount(record.blankLinesBefore)
+      : 0,
+    settings: state.settings,
+    isFinal: false
+  });
 }
 
 function createParagraphElement(text, options = {}) {
@@ -774,14 +926,16 @@ function parseBodyStructure(text) {
   if (!normalized) return { paragraphs: [], trailingBlankLines: 0 };
 
   const lines = normalized.split('\n');
-  const paragraphs = [];
+  const records = [];
   let currentLines = [];
   let pendingBlankLines = 0;
   let currentBlankLinesBefore = 0;
 
   const flushParagraph = () => {
     if (!currentLines.length) return;
-    paragraphs.push({
+    records.push({
+      type: 'paragraph',
+      level: null,
       text: currentLines.join('\n'),
       blankLinesBefore: sanitizeBlankLineCount(currentBlankLinesBefore)
     });
@@ -797,6 +951,19 @@ function parseBodyStructure(text) {
       return;
     }
 
+    const headingMatch = line.match(/^\s*(#{1,3})[\t \u3000]+(.+?)\s*$/);
+    if (headingMatch) {
+      flushParagraph();
+      records.push({
+        type: 'heading',
+        level: headingMatch[1].length,
+        text: headingMatch[2],
+        blankLinesBefore: sanitizeBlankLineCount(pendingBlankLines)
+      });
+      pendingBlankLines = 0;
+      return;
+    }
+
     if (!currentLines.length) {
       currentBlankLinesBefore = pendingBlankLines;
       pendingBlankLines = 0;
@@ -806,20 +973,24 @@ function parseBodyStructure(text) {
 
   flushParagraph();
   return {
-    paragraphs,
+    paragraphs: records,
     trailingBlankLines: sanitizeBlankLineCount(pendingBlankLines)
   };
 }
 
 function normalizeParagraphs(text) {
-  return parseBodyStructure(text).paragraphs.map((paragraph) => paragraph.text);
+  return parseBodyStructure(text).paragraphs
+    .filter((record) => record.type === 'paragraph')
+    .map((record) => record.text);
 }
 
 function createParagraphRecords(text) {
-  return parseBodyStructure(text).paragraphs.map((paragraph) => ({
-    id: createId('paragraph'),
-    text: paragraph.text,
-    blankLinesBefore: paragraph.blankLinesBefore
+  return parseBodyStructure(text).paragraphs.map((record) => ({
+    id: createId(record.type === 'heading' ? 'heading' : 'paragraph'),
+    type: record.type,
+    level: record.type === 'heading' ? record.level : null,
+    text: record.text,
+    blankLinesBefore: record.blankLinesBefore
   }));
 }
 
@@ -837,6 +1008,10 @@ function buildPreview(pageFragments, settings) {
       if (fragment.type === 'heading') {
         const heading = createHeadingElement(fragment.data);
         if (heading) content.appendChild(heading);
+      } else if (fragment.type === 'body-heading') {
+        content.appendChild(createBodyHeadingElement(fragment.record, settings, {
+          blankLinesBefore: fragment.blankLinesBefore
+        }));
       } else if (fragment.type === 'paragraph') {
         content.appendChild(createParagraphElement(fragment.text, {
           continuation: fragment.continuation,
@@ -956,6 +1131,29 @@ function collectSettings() {
     titleSize: sanitizeNumber(els.titleSize.value, 20),
     titleBottom: sanitizeNumber(els.titleBottom.value, 14),
     titleAlign: els.titleAlign.value,
+    showDocumentHeading: els.showDocumentHeading.checked,
+    bodyStartOnNewPage: els.bodyStartOnNewPage.checked,
+    heading1FontFamily: els.heading1FontFamily.value,
+    heading1Size: sanitizeNumber(els.heading1Size.value, 16),
+    heading1Align: els.heading1Align.value,
+    heading1SpaceBefore: sanitizeNumber(els.heading1SpaceBefore.value, 10),
+    heading1SpaceAfter: sanitizeNumber(els.heading1SpaceAfter.value, 5),
+    heading1PageBreakBefore: els.heading1PageBreakBefore.checked,
+    heading1KeepWithNext: els.heading1KeepWithNext.checked,
+    heading2FontFamily: els.heading2FontFamily.value,
+    heading2Size: sanitizeNumber(els.heading2Size.value, 13),
+    heading2Align: els.heading2Align.value,
+    heading2SpaceBefore: sanitizeNumber(els.heading2SpaceBefore.value, 7),
+    heading2SpaceAfter: sanitizeNumber(els.heading2SpaceAfter.value, 3),
+    heading2PageBreakBefore: els.heading2PageBreakBefore.checked,
+    heading2KeepWithNext: els.heading2KeepWithNext.checked,
+    heading3FontFamily: els.heading3FontFamily.value,
+    heading3Size: sanitizeNumber(els.heading3Size.value, 11),
+    heading3Align: els.heading3Align.value,
+    heading3SpaceBefore: sanitizeNumber(els.heading3SpaceBefore.value, 5),
+    heading3SpaceAfter: sanitizeNumber(els.heading3SpaceAfter.value, 2),
+    heading3PageBreakBefore: els.heading3PageBreakBefore.checked,
+    heading3KeepWithNext: els.heading3KeepWithNext.checked,
     showPageNumbers: els.showPageNumbers.checked,
     firstPageNumber: els.firstPageNumber.checked,
     viewMode: els.viewMode.value,
@@ -1011,6 +1209,17 @@ function applySettingsToInputs(settings) {
   els.titleSize.value = normalized.titleSize;
   els.titleBottom.value = normalized.titleBottom;
   els.titleAlign.value = normalized.titleAlign;
+  els.showDocumentHeading.checked = Boolean(normalized.showDocumentHeading);
+  els.bodyStartOnNewPage.checked = Boolean(normalized.bodyStartOnNewPage);
+  [1, 2, 3].forEach((level) => {
+    els[`heading${level}FontFamily`].value = normalized[`heading${level}FontFamily`];
+    els[`heading${level}Size`].value = normalized[`heading${level}Size`];
+    els[`heading${level}Align`].value = normalized[`heading${level}Align`];
+    els[`heading${level}SpaceBefore`].value = normalized[`heading${level}SpaceBefore`];
+    els[`heading${level}SpaceAfter`].value = normalized[`heading${level}SpaceAfter`];
+    els[`heading${level}PageBreakBefore`].checked = Boolean(normalized[`heading${level}PageBreakBefore`]);
+    els[`heading${level}KeepWithNext`].checked = Boolean(normalized[`heading${level}KeepWithNext`]);
+  });
   els.showPageNumbers.checked = Boolean(normalized.showPageNumbers);
   els.firstPageNumber.checked = Boolean(normalized.firstPageNumber);
   els.viewMode.value = normalized.viewMode;
@@ -1036,6 +1245,8 @@ function normalizeState(raw) {
         .filter((record) => record && typeof record.id === 'string')
         .map((record) => ({
           id: record.id,
+          type: record.type === 'heading' ? 'heading' : 'paragraph',
+          level: record.type === 'heading' ? Math.min(3, Math.max(1, Number(record.level) || 1)) : null,
           text: String(record.text || ''),
           blankLinesBefore: sanitizeBlankLineCount(record.blankLinesBefore)
         }))
@@ -1043,7 +1254,9 @@ function normalizeState(raw) {
   const parsedBody = parseBodyStructure(manuscript.body);
   manuscript.paragraphs = reconcileParagraphRecords(oldRecords, manuscript.body);
   manuscript.trailingBlankLines = parsedBody.trailingBlankLines;
-  const validIds = new Set(manuscript.paragraphs.map((record) => record.id));
+  const validIds = new Set(
+    manuscript.paragraphs.filter((record) => record.type !== 'heading').map((record) => record.id)
+  );
 
   const normalizedSettings = { ...base.settings, ...(source.settings || {}) };
   if (!source.settings || source.settings.useTextIndent === undefined) {
@@ -1067,30 +1280,34 @@ function normalizeState(raw) {
 function reconcileParagraphRecords(oldRecords, body) {
   const parsed = parseBodyStructure(body);
   const incoming = parsed.paragraphs;
-  const texts = incoming.map((record) => record.text);
   const old = Array.isArray(oldRecords)
     ? oldRecords.filter((record) => record && typeof record.id === 'string')
     : [];
 
-  if (texts.length === old.length) {
+  const signature = (record) => `${record.type || 'paragraph'}:${record.level || 0}:${String(record.text || '')}`;
+
+  if (incoming.length === old.length) {
     return incoming.map((record, index) => ({
-      id: old[index]?.id || createId('paragraph'),
+      id: old[index]?.id || createId(record.type === 'heading' ? 'heading' : 'paragraph'),
+      type: record.type,
+      level: record.type === 'heading' ? record.level : null,
       text: record.text,
       blankLinesBefore: record.blankLinesBefore
     }));
   }
 
   if (!old.length) return createParagraphRecords(body);
-  if (!texts.length) return [];
+  if (!incoming.length) return [];
 
-  const oldTexts = old.map((record) => String(record.text || ''));
-  const rows = oldTexts.length + 1;
-  const cols = texts.length + 1;
+  const oldSignatures = old.map(signature);
+  const newSignatures = incoming.map(signature);
+  const rows = oldSignatures.length + 1;
+  const cols = newSignatures.length + 1;
   const dp = Array.from({ length: rows }, () => new Uint16Array(cols));
 
-  for (let i = oldTexts.length - 1; i >= 0; i -= 1) {
-    for (let j = texts.length - 1; j >= 0; j -= 1) {
-      dp[i][j] = oldTexts[i] === texts[j]
+  for (let i = oldSignatures.length - 1; i >= 0; i -= 1) {
+    for (let j = newSignatures.length - 1; j >= 0; j -= 1) {
+      dp[i][j] = oldSignatures[i] === newSignatures[j]
         ? dp[i + 1][j + 1] + 1
         : Math.max(dp[i + 1][j], dp[i][j + 1]);
     }
@@ -1099,8 +1316,8 @@ function reconcileParagraphRecords(oldRecords, body) {
   const matches = [];
   let i = 0;
   let j = 0;
-  while (i < oldTexts.length && j < texts.length) {
-    if (oldTexts[i] === texts[j]) {
+  while (i < oldSignatures.length && j < newSignatures.length) {
+    if (oldSignatures[i] === newSignatures[j]) {
       matches.push([i, j]);
       i += 1;
       j += 1;
@@ -1111,8 +1328,8 @@ function reconcileParagraphRecords(oldRecords, body) {
     }
   }
 
-  const result = new Array(texts.length);
-  const anchors = [[-1, -1], ...matches, [old.length, texts.length]];
+  const result = new Array(incoming.length);
+  const anchors = [[-1, -1], ...matches, [old.length, incoming.length]];
 
   for (let anchorIndex = 0; anchorIndex < anchors.length - 1; anchorIndex += 1) {
     const [oldStart, newStart] = anchors[anchorIndex];
@@ -1122,26 +1339,29 @@ function reconcileParagraphRecords(oldRecords, body) {
     const newGapLength = newEnd - newGapStart;
 
     for (let offset = 0; offset < newGapLength; offset += 1) {
+      const incomingRecord = incoming[newGapStart + offset];
+      const candidate = oldGap[offset];
       result[newGapStart + offset] = {
-        id: oldGap[offset]?.id || createId('paragraph'),
-        text: texts[newGapStart + offset]
+        id: candidate?.id || createId(incomingRecord.type === 'heading' ? 'heading' : 'paragraph')
       };
     }
 
-    if (oldEnd < old.length && newEnd < texts.length) {
-      result[newEnd] = { id: old[oldEnd].id, text: texts[newEnd] };
+    if (oldEnd < old.length && newEnd < incoming.length) {
+      result[newEnd] = { id: old[oldEnd].id };
     }
   }
 
   const usedIds = new Set();
-  return result.map((record, index) => {
-    let id = record?.id || createId('paragraph');
-    if (usedIds.has(id)) id = createId('paragraph');
+  return incoming.map((record, index) => {
+    let id = result[index]?.id || createId(record.type === 'heading' ? 'heading' : 'paragraph');
+    if (usedIds.has(id)) id = createId(record.type === 'heading' ? 'heading' : 'paragraph');
     usedIds.add(id);
     return {
       id,
-      text: texts[index],
-      blankLinesBefore: incoming[index].blankLinesBefore
+      type: record.type,
+      level: record.type === 'heading' ? record.level : null,
+      text: record.text,
+      blankLinesBefore: record.blankLinesBefore
     };
   });
 }
@@ -1150,7 +1370,9 @@ function syncParagraphRecordsFromBody() {
   const parsedBody = parseBodyStructure(els.bodyInput.value);
   paragraphRecords = reconcileParagraphRecords(paragraphRecords, els.bodyInput.value);
   trailingBlankLines = parsedBody.trailingBlankLines;
-  const validIds = new Set(paragraphRecords.map((record) => record.id));
+  const validIds = new Set(
+    paragraphRecords.filter((record) => record.type !== 'heading').map((record) => record.id)
+  );
   paragraphOverrides = normalizeParagraphOverrides(paragraphOverrides, validIds);
   if (selectedParagraphId && !validIds.has(selectedParagraphId)) selectedParagraphId = null;
 }
@@ -1191,7 +1413,8 @@ function hasMeaningfulOverride(override) {
 }
 
 function selectParagraph(paragraphId, shouldScroll = true) {
-  const index = paragraphRecords.findIndex((record) => record.id === paragraphId);
+  const editable = getEditableParagraphRecords();
+  const index = editable.findIndex((record) => record.id === paragraphId);
   if (index < 0) return;
   selectedParagraphId = paragraphId;
   updateParagraphControls();
@@ -1204,17 +1427,19 @@ function selectParagraph(paragraphId, shouldScroll = true) {
 }
 
 function navigateSelectedParagraph(direction) {
-  if (!paragraphRecords.length) return;
-  const currentIndex = paragraphRecords.findIndex((record) => record.id === selectedParagraphId);
+  const editable = getEditableParagraphRecords();
+  if (!editable.length) return;
+  const currentIndex = editable.findIndex((record) => record.id === selectedParagraphId);
   const nextIndex = Math.min(
-    paragraphRecords.length - 1,
+    editable.length - 1,
     Math.max(0, (currentIndex < 0 ? 0 : currentIndex) + direction)
   );
-  selectParagraph(paragraphRecords[nextIndex].id, true);
+  selectParagraph(editable[nextIndex].id, true);
 }
 
 function updateParagraphControls() {
-  const index = paragraphRecords.findIndex((record) => record.id === selectedParagraphId);
+  const editable = getEditableParagraphRecords();
+  const index = editable.findIndex((record) => record.id === selectedParagraphId);
   const hasSelection = index >= 0;
   els.paragraphSettingsFieldset.classList.toggle('empty', !hasSelection);
   els.paragraphEmptyState.hidden = hasSelection;
@@ -1222,7 +1447,7 @@ function updateParagraphControls() {
 
   if (!hasSelection) return;
 
-  const record = paragraphRecords[index];
+  const record = editable[index];
   const override = normalizeParagraphOverride(paragraphOverrides[record.id]);
   isApplyingParagraphControls = true;
   try {
@@ -1239,8 +1464,8 @@ function updateParagraphControls() {
     els.paragraphPageBreakBefore.checked = Boolean(override.pageBreakBefore);
     els.paragraphKeepWithNext.checked = Boolean(override.keepWithNext);
     els.previousParagraphBtn.disabled = index === 0;
-    els.nextParagraphBtn.disabled = index === paragraphRecords.length - 1;
-    els.paragraphKeepWithNext.disabled = index === paragraphRecords.length - 1;
+    els.nextParagraphBtn.disabled = index === editable.length - 1;
+    els.paragraphKeepWithNext.disabled = index === editable.length - 1;
   } finally {
     isApplyingParagraphControls = false;
   }
