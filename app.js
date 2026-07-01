@@ -1,14 +1,20 @@
 'use strict';
 
-const APP_VERSION = 'v002';
-const SCHEMA_VERSION = 2;
+const APP_VERSION = 'v003';
+const SCHEMA_VERSION = 3;
 const AUTOSAVE_DELAY = 700;
 
-const PROJECT_INDEX_KEY = 'typesetting-app-v002-project-index';
-const PROJECT_PREFIX = 'typesetting-app-v002-project:';
-const CURRENT_PROJECT_KEY = 'typesetting-app-v002-current-project';
-const TEMPLATE_STORAGE_KEY = 'typesetting-app-v002-templates';
-const LEGACY_STORAGE_KEY = 'typesetting-app-v001';
+const PROJECT_INDEX_KEY = 'typesetting-app-v003-project-index';
+const PROJECT_PREFIX = 'typesetting-app-v003-project:';
+const CURRENT_PROJECT_KEY = 'typesetting-app-v003-current-project';
+const TEMPLATE_STORAGE_KEY = 'typesetting-app-v003-templates';
+
+const LEGACY_V2_PROJECT_INDEX_KEY = 'typesetting-app-v002-project-index';
+const LEGACY_V2_PROJECT_PREFIX = 'typesetting-app-v002-project:';
+const LEGACY_V2_CURRENT_PROJECT_KEY = 'typesetting-app-v002-current-project';
+const LEGACY_V2_TEMPLATE_STORAGE_KEY = 'typesetting-app-v002-templates';
+const LEGACY_V1_STORAGE_KEY = 'typesetting-app-v001';
+const MIGRATION_MARKER_KEY = 'typesetting-app-v003-migration-complete';
 
 const DEFAULT_SETTINGS = Object.freeze({
   paperPreset: 'A5',
@@ -36,14 +42,23 @@ const DEFAULT_SETTINGS = Object.freeze({
 
 const SAMPLE_MANUSCRIPT = Object.freeze({
   title: 'サンプルタイトル',
-  subtitle: '自動組版の確認用原稿',
+  subtitle: '段落個別調整の確認用原稿',
   author: '著者名',
-  body: `これは、組版アプリv002の動作確認用原稿です。\n\n右側の設定を変更すると、用紙サイズ、余白、フォント、文字サイズ、文字間、行間が中央のプレビューへ自動反映されます。本文は空行ごとに段落として扱われ、ページ内に収まらない場合は自動的に次のページへ送られます。\n\nv002では、複数のプロジェクトをブラウザ内へ個別保存できます。右上の「プロジェクト」から保存済み案件を開き、複製、削除できます。\n\nまた、現在の組版設定だけをテンプレートとして保存できます。原稿内容はテンプレートに含まれないため、別の案件へ同じ判型や文字設定を安全に適用できます。\n\nJSON出力は、バックアップや別端末への移動に使用してください。PDFとして保存する際は、右上の「PDF出力」を押し、ブラウザの印刷画面で余白なし、倍率100%を推奨します。`
+  body: `これは、組版アプリv003の動作確認用原稿です。
+
+右側の設定を変更すると、用紙サイズ、余白、フォント、文字サイズ、文字間、行間が中央のプレビューへ自動反映されます。本文は空行ごとに段落として扱われ、ページ内に収まらない場合は自動的に次のページへ送られます。
+
+v003では、中央プレビューの本文段落をクリックし、その段落だけ文字サイズ、行間、文字間、揃え、前後余白などを調整できます。
+
+強制改ページや「次の段落と同じページに置く」設定にも対応しています。個別設定を解除すると、本文全体の組版設定へ戻ります。
+
+JSON出力は、バックアップや別端末への移動に使用してください。PDFとして保存する際は、右上の「PDF出力」を押し、ブラウザの印刷画面で余白なし、倍率100%を推奨します。`
 });
 
 const DEFAULT_STATE = Object.freeze({
-  projectName: '組版アプリ v002 サンプル',
-  manuscript: SAMPLE_MANUSCRIPT,
+  projectName: '組版アプリ v003 サンプル',
+  manuscript: { ...SAMPLE_MANUSCRIPT, paragraphs: [] },
+  paragraphOverrides: {},
   settings: DEFAULT_SETTINGS,
   metadata: {
     appVersion: APP_VERSION,
@@ -101,6 +116,10 @@ let autosaveTimer = null;
 let toastTimer = null;
 let isRendering = false;
 let isApplyingState = false;
+let isApplyingParagraphControls = false;
+let paragraphRecords = [];
+let paragraphOverrides = {};
+let selectedParagraphId = null;
 
 window.addEventListener('DOMContentLoaded', init);
 
@@ -125,7 +144,12 @@ function cacheElements() {
     'showPageNumbers', 'firstPageNumber', 'viewMode', 'zoomSelect', 'toggleGuidesBtn',
     'resetSettingsBtn', 'measureRoot', 'toast', 'previewViewport', 'projectsModal',
     'projectList', 'projectStorageSummary', 'createProjectFromModalBtn', 'templatesModal',
-    'templateNameInput', 'saveTemplateBtn', 'templateList'
+    'templateNameInput', 'saveTemplateBtn', 'templateList', 'paragraphSettingsFieldset',
+    'paragraphEmptyState', 'paragraphControls', 'selectedParagraphLabel',
+    'selectedParagraphExcerpt', 'previousParagraphBtn', 'nextParagraphBtn',
+    'paragraphFontSize', 'paragraphLineHeight', 'paragraphLetterSpacing',
+    'paragraphSpaceBefore', 'paragraphSpaceAfter', 'paragraphTextAlign',
+    'paragraphPageBreakBefore', 'paragraphKeepWithNext', 'resetParagraphBtn'
   ];
 
   ids.forEach((id) => {
@@ -135,7 +159,7 @@ function cacheElements() {
 
 function bindEvents() {
   const renderInputs = [
-    els.projectName, els.titleInput, els.subtitleInput, els.authorInput, els.bodyInput,
+    els.projectName, els.titleInput, els.subtitleInput, els.authorInput,
     els.pageWidth, els.pageHeight, els.marginTop, els.marginBottom, els.marginLeft,
     els.marginRight, els.fontFamily, els.fontSize, els.lineHeight, els.letterSpacing,
     els.textIndent, els.textAlign, els.titleSize, els.titleBottom, els.titleAlign,
@@ -146,11 +170,20 @@ function bindEvents() {
     const eventName = element.matches('select, input[type="checkbox"]') ? 'change' : 'input';
     element.addEventListener(eventName, () => {
       if (isApplyingState) return;
-      if (element === els.bodyInput) updateCharCount();
       markDirty();
       scheduleRender();
       scheduleAutosave();
     });
+  });
+
+  els.bodyInput.addEventListener('input', () => {
+    if (isApplyingState) return;
+    syncParagraphRecordsFromBody();
+    updateCharCount();
+    updateParagraphControls();
+    markDirty();
+    scheduleRender();
+    scheduleAutosave();
   });
 
   els.paperPreset.addEventListener('change', handlePresetChange);
@@ -164,6 +197,23 @@ function bindEvents() {
     markDirty();
     scheduleAutosave();
   });
+
+  els.pages.addEventListener('click', (event) => {
+    const paragraph = event.target.closest('.body-paragraph[data-paragraph-id]');
+    if (!paragraph) return;
+    selectParagraph(paragraph.dataset.paragraphId, false);
+  });
+
+  [
+    els.paragraphFontSize, els.paragraphLineHeight, els.paragraphLetterSpacing,
+    els.paragraphSpaceBefore, els.paragraphSpaceAfter
+  ].forEach((input) => input.addEventListener('input', updateSelectedParagraphOverride));
+  els.paragraphTextAlign.addEventListener('change', updateSelectedParagraphOverride);
+  els.paragraphPageBreakBefore.addEventListener('change', updateSelectedParagraphOverride);
+  els.paragraphKeepWithNext.addEventListener('change', updateSelectedParagraphOverride);
+  els.resetParagraphBtn.addEventListener('click', resetSelectedParagraphOverride);
+  els.previousParagraphBtn.addEventListener('click', () => navigateSelectedParagraph(-1));
+  els.nextParagraphBtn.addEventListener('click', () => navigateSelectedParagraph(1));
 
   els.newBtn.addEventListener('click', () => createNewProject(true));
   els.projectsBtn.addEventListener('click', openProjectsModal);
@@ -211,6 +261,7 @@ function bindEvents() {
 }
 
 function loadInitialProject() {
+  migrateLegacyData();
   const index = loadProjectIndex();
   const preferredId = safeStorageGet(CURRENT_PROJECT_KEY);
 
@@ -226,9 +277,9 @@ function loadInitialProject() {
     }
   }
 
-  const legacy = readJsonFromStorage(LEGACY_STORAGE_KEY, null);
-  if (legacy) {
-    const migrated = normalizeState(legacy);
+  const legacyV1 = readJsonFromStorage(LEGACY_V1_STORAGE_KEY, null);
+  if (legacyV1) {
+    const migrated = normalizeState(legacyV1);
     migrated.projectName = `${migrated.projectName || '組版データ'}（v001移行）`;
     assignNewProjectMetadata(migrated);
     currentProjectId = migrated.metadata.projectId;
@@ -236,17 +287,59 @@ function loadInitialProject() {
     applyState(migrated);
     saveCurrentProject(false);
     updateSaveStatus('v001データを移行済み');
-    showToast('v001のブラウザ保存データをv002へ移行しました。');
+    showToast('v001の保存データをv003へ移行しました。');
     return;
   }
 
-  const initial = deepClone(DEFAULT_STATE);
+  const initial = normalizeState(deepClone(DEFAULT_STATE));
   assignNewProjectMetadata(initial);
   currentProjectId = initial.metadata.projectId;
   currentProjectCreatedAt = initial.metadata.createdAt;
   applyState(initial);
   saveCurrentProject(false);
   updateSaveStatus('初期データを保存済み');
+}
+
+function migrateLegacyData() {
+  if (safeStorageGet(MIGRATION_MARKER_KEY) === 'true') return;
+  if (loadProjectIndex().length > 0) {
+    safeStorageSet(MIGRATION_MARKER_KEY, 'true');
+    return;
+  }
+
+  const legacyIndex = readJsonFromStorage(LEGACY_V2_PROJECT_INDEX_KEY, []);
+  let migratedCount = 0;
+  let mappedCurrentId = null;
+  const legacyCurrentId = safeStorageGet(LEGACY_V2_CURRENT_PROJECT_KEY);
+
+  if (Array.isArray(legacyIndex)) {
+    legacyIndex.forEach((item) => {
+      if (!item?.id) return;
+      const raw = readJsonFromStorage(`${LEGACY_V2_PROJECT_PREFIX}${item.id}`, null);
+      if (!raw) return;
+      const state = normalizeState(raw);
+      state.metadata.appVersion = APP_VERSION;
+      state.metadata.schemaVersion = SCHEMA_VERSION;
+      state.metadata.projectId = item.id;
+      state.metadata.createdAt = state.metadata.createdAt || new Date().toISOString();
+      state.metadata.updatedAt = state.metadata.updatedAt || new Date().toISOString();
+      persistProjectRecord(state);
+      migratedCount += 1;
+      if (item.id === legacyCurrentId) mappedCurrentId = item.id;
+    });
+  }
+
+  const legacyTemplates = readJsonFromStorage(LEGACY_V2_TEMPLATE_STORAGE_KEY, []);
+  if (Array.isArray(legacyTemplates) && legacyTemplates.length) {
+    safeStorageSet(TEMPLATE_STORAGE_KEY, JSON.stringify(legacyTemplates));
+  }
+
+  if (mappedCurrentId) safeStorageSet(CURRENT_PROJECT_KEY, mappedCurrentId);
+  safeStorageSet(MIGRATION_MARKER_KEY, 'true');
+
+  if (migratedCount > 0) {
+    showToast(`v002のプロジェクト${migratedCount}件をv003へ移行しました。`);
+  }
 }
 
 function handlePresetChange() {
@@ -291,6 +384,7 @@ function renderDocument() {
     buildPreview(fragments, state.settings);
     applyViewSettings();
     applyGuides();
+    updateParagraphSelectionHighlight();
     els.pageCount.textContent = `${fragments.length}ページ`;
   } catch (error) {
     console.error(error);
@@ -312,48 +406,115 @@ function paginate(state) {
     pages[pageIndex].push({ type: 'heading', data: state.manuscript });
   }
 
-  const paragraphs = normalizeParagraphs(state.manuscript.body);
+  const paragraphs = Array.isArray(state.manuscript.paragraphs)
+    ? state.manuscript.paragraphs
+    : createParagraphRecords(state.manuscript.body);
 
-  paragraphs.forEach((paragraphText) => {
-    let remaining = paragraphText;
+  paragraphs.forEach((record, paragraphIndex) => {
+    const override = normalizeParagraphOverride(state.paragraphOverrides?.[record.id]);
+    const nextRecord = paragraphs[paragraphIndex + 1] || null;
+    const nextOverride = nextRecord
+      ? normalizeParagraphOverride(state.paragraphOverrides?.[nextRecord.id])
+      : null;
+
+    if (override.pageBreakBefore && content.childElementCount > 0) startNewPage();
+
+    if (override.keepWithNext && nextRecord && content.childElementCount > 0) {
+      const currentProbe = createParagraphElement(record.text, {
+        override,
+        isFinal: true
+      });
+      const nextProbe = createParagraphElement(nextRecord.text, {
+        override: nextOverride,
+        isFinal: true
+      });
+      content.append(currentProbe, nextProbe);
+      const pairFits = fits(content);
+      currentProbe.remove();
+      nextProbe.remove();
+      if (!pairFits) startNewPage();
+    }
+
+    let remaining = record.text;
     let isContinuation = false;
 
     while (remaining.length > 0) {
-      const fullParagraph = createParagraphElement(remaining, isContinuation);
+      const fullParagraph = createParagraphElement(remaining, {
+        continuation: isContinuation,
+        override,
+        isFinal: true
+      });
       content.appendChild(fullParagraph);
 
       if (fits(content)) {
-        pages[pageIndex].push({ type: 'paragraph', text: remaining, continuation: isContinuation });
+        pages[pageIndex].push({
+          type: 'paragraph',
+          text: remaining,
+          continuation: isContinuation,
+          isFinal: true,
+          paragraphId: record.id,
+          paragraphIndex,
+          override
+        });
         remaining = '';
         continue;
       }
 
       fullParagraph.remove();
+      const splitIndex = findFittingLength(content, remaining, isContinuation, override);
+
+      if (content.childElementCount > 0 && splitIndex >= remaining.length) {
+        startNewPage();
+        continue;
+      }
 
       if (content.childElementCount === 0) {
-        const splitIndex = findFittingLength(content, remaining, isContinuation);
-        const safeIndex = Math.max(1, splitIndex);
+        const safeIndex = Math.max(1, Math.min(splitIndex || 1, remaining.length));
         const head = remaining.slice(0, safeIndex);
         const tail = remaining.slice(safeIndex);
-        content.appendChild(createParagraphElement(head, isContinuation));
-        pages[pageIndex].push({ type: 'paragraph', text: head, continuation: isContinuation });
+        const isFinal = tail.length === 0;
+        content.appendChild(createParagraphElement(head, {
+          continuation: isContinuation,
+          override,
+          isFinal: false
+        }));
+        pages[pageIndex].push({
+          type: 'paragraph',
+          text: head,
+          continuation: isContinuation,
+          isFinal,
+          paragraphId: record.id,
+          paragraphIndex,
+          override
+        });
         remaining = tail;
         isContinuation = true;
-        startNewPage();
-      } else {
-        const splitIndex = findFittingLength(content, remaining, isContinuation);
-
-        if (splitIndex > 0) {
-          const head = remaining.slice(0, splitIndex);
-          const tail = remaining.slice(splitIndex);
-          content.appendChild(createParagraphElement(head, isContinuation));
-          pages[pageIndex].push({ type: 'paragraph', text: head, continuation: isContinuation });
-          remaining = tail;
-          isContinuation = true;
-        }
-
-        startNewPage();
+        if (remaining.length > 0) startNewPage();
+        continue;
       }
+
+      if (splitIndex > 0) {
+        const head = remaining.slice(0, splitIndex);
+        const tail = remaining.slice(splitIndex);
+        content.appendChild(createParagraphElement(head, {
+          continuation: isContinuation,
+          override,
+          isFinal: false
+        }));
+        pages[pageIndex].push({
+          type: 'paragraph',
+          text: head,
+          continuation: isContinuation,
+          isFinal: false,
+          paragraphId: record.id,
+          paragraphIndex,
+          override
+        });
+        remaining = tail;
+        isContinuation = true;
+      }
+
+      startNewPage();
     }
   });
 
@@ -383,14 +544,18 @@ function fits(content) {
   return content.scrollHeight <= content.clientHeight + 0.5;
 }
 
-function findFittingLength(content, text, continuation) {
+function findFittingLength(content, text, continuation, override) {
   let low = 0;
   let high = text.length;
   let best = 0;
 
   while (low <= high) {
     const mid = Math.floor((low + high) / 2);
-    const probe = createParagraphElement(text.slice(0, mid), continuation);
+    const probe = createParagraphElement(text.slice(0, mid), {
+      continuation,
+      override,
+      isFinal: false
+    });
     content.appendChild(probe);
     const doesFit = fits(content);
     probe.remove();
@@ -444,12 +609,40 @@ function createHeadingElement(manuscript) {
   return wrap;
 }
 
-function createParagraphElement(text, continuation = false) {
+function createParagraphElement(text, options = {}) {
+  const {
+    continuation = false,
+    override = {},
+    isFinal = true,
+    paragraphId = null,
+    paragraphIndex = null,
+    selectable = false
+  } = options;
+
   const paragraph = document.createElement('p');
   paragraph.className = 'body-paragraph';
   paragraph.textContent = text;
   if (continuation) paragraph.style.textIndent = '0';
+  applyParagraphOverrideStyles(paragraph, override, continuation, isFinal);
+
+  if (paragraphId) {
+    paragraph.dataset.paragraphId = paragraphId;
+    paragraph.dataset.paragraphIndex = String(paragraphIndex ?? 0);
+    if (selectable) paragraph.tabIndex = 0;
+    if (hasMeaningfulOverride(override)) paragraph.classList.add('has-override');
+  }
+
   return paragraph;
+}
+
+function applyParagraphOverrideStyles(paragraph, override, continuation, isFinal) {
+  const normalized = normalizeParagraphOverride(override);
+  if (Number.isFinite(normalized.fontSize)) paragraph.style.fontSize = `${normalized.fontSize}pt`;
+  if (Number.isFinite(normalized.lineHeight)) paragraph.style.lineHeight = `${normalized.lineHeight}pt`;
+  if (Number.isFinite(normalized.letterSpacing)) paragraph.style.letterSpacing = `${normalized.letterSpacing}em`;
+  if (normalized.textAlign && normalized.textAlign !== 'inherit') paragraph.style.textAlign = normalized.textAlign;
+  if (!continuation && Number.isFinite(normalized.spaceBefore)) paragraph.style.marginTop = `${normalized.spaceBefore}mm`;
+  if (isFinal && Number.isFinite(normalized.spaceAfter)) paragraph.style.marginBottom = `${normalized.spaceAfter}mm`;
 }
 
 function normalizeParagraphs(text) {
@@ -459,6 +652,13 @@ function normalizeParagraphs(text) {
     .split(/\n[\t \u3000]*\n+/)
     .map((paragraph) => paragraph.trim())
     .filter(Boolean);
+}
+
+function createParagraphRecords(text) {
+  return normalizeParagraphs(text).map((paragraphText) => ({
+    id: createId('paragraph'),
+    text: paragraphText
+  }));
 }
 
 function buildPreview(pageFragments, settings) {
@@ -476,7 +676,14 @@ function buildPreview(pageFragments, settings) {
         const heading = createHeadingElement(fragment.data);
         if (heading) content.appendChild(heading);
       } else if (fragment.type === 'paragraph') {
-        content.appendChild(createParagraphElement(fragment.text, fragment.continuation));
+        content.appendChild(createParagraphElement(fragment.text, {
+          continuation: fragment.continuation,
+          override: fragment.override,
+          isFinal: fragment.isFinal,
+          paragraphId: fragment.paragraphId,
+          paragraphIndex: fragment.paragraphIndex,
+          selectable: true
+        }));
       }
     });
 
@@ -537,6 +744,7 @@ function applyPrintPageRule() {
 }
 
 function collectState() {
+  syncParagraphRecordsFromBody();
   const now = new Date().toISOString();
   return {
     projectName: els.projectName.value.trim() || '名称未設定',
@@ -544,8 +752,10 @@ function collectState() {
       title: els.titleInput.value,
       subtitle: els.subtitleInput.value,
       author: els.authorInput.value,
-      body: els.bodyInput.value
+      body: els.bodyInput.value,
+      paragraphs: deepClone(paragraphRecords)
     },
+    paragraphOverrides: deepClone(paragraphOverrides),
     settings: collectSettings(),
     metadata: {
       appVersion: APP_VERSION,
@@ -593,8 +803,12 @@ function applyState(state) {
     els.subtitleInput.value = normalized.manuscript.subtitle;
     els.authorInput.value = normalized.manuscript.author;
     els.bodyInput.value = normalized.manuscript.body;
+    paragraphRecords = deepClone(normalized.manuscript.paragraphs);
+    paragraphOverrides = deepClone(normalized.paragraphOverrides);
+    selectedParagraphId = null;
     applySettingsToInputs(normalized.settings);
     updateCharCount();
+    updateParagraphControls();
     applyViewSettings();
     scheduleRender();
   } finally {
@@ -630,25 +844,263 @@ function applySettingsToInputs(settings) {
 
 function normalizeState(raw) {
   const base = deepClone(DEFAULT_STATE);
-  if (!raw || typeof raw !== 'object') return base;
+  const source = raw && typeof raw === 'object' ? raw : {};
+  const manuscriptSource = source.manuscript && typeof source.manuscript === 'object'
+    ? source.manuscript
+    : {};
+  const manuscript = { ...base.manuscript, ...manuscriptSource };
+  manuscript.title = String(manuscript.title || '');
+  manuscript.subtitle = String(manuscript.subtitle || '');
+  manuscript.author = String(manuscript.author || '');
+  manuscript.body = String(manuscript.body || '');
+
+  const oldRecords = Array.isArray(manuscriptSource.paragraphs)
+    ? manuscriptSource.paragraphs
+        .filter((record) => record && typeof record.id === 'string')
+        .map((record) => ({ id: record.id, text: String(record.text || '') }))
+    : [];
+  manuscript.paragraphs = reconcileParagraphRecords(oldRecords, manuscript.body, false);
+  const validIds = new Set(manuscript.paragraphs.map((record) => record.id));
+
   return {
-    projectName: typeof raw.projectName === 'string' ? raw.projectName : base.projectName,
-    manuscript: { ...base.manuscript, ...(raw.manuscript || {}) },
-    settings: { ...base.settings, ...(raw.settings || {}) },
-    metadata: { ...base.metadata, ...(raw.metadata || {}) }
+    projectName: typeof source.projectName === 'string' ? source.projectName : base.projectName,
+    manuscript,
+    paragraphOverrides: normalizeParagraphOverrides(source.paragraphOverrides, validIds),
+    settings: { ...base.settings, ...(source.settings || {}) },
+    metadata: {
+      ...base.metadata,
+      ...(source.metadata || {}),
+      appVersion: APP_VERSION,
+      schemaVersion: SCHEMA_VERSION
+    }
   };
+}
+
+function reconcileParagraphRecords(oldRecords, body) {
+  const texts = normalizeParagraphs(body);
+  const old = Array.isArray(oldRecords)
+    ? oldRecords.filter((record) => record && typeof record.id === 'string')
+    : [];
+
+  if (texts.length === old.length) {
+    return texts.map((text, index) => ({
+      id: old[index]?.id || createId('paragraph'),
+      text
+    }));
+  }
+
+  if (!old.length) return createParagraphRecords(body);
+  if (!texts.length) return [];
+
+  const oldTexts = old.map((record) => String(record.text || ''));
+  const rows = oldTexts.length + 1;
+  const cols = texts.length + 1;
+  const dp = Array.from({ length: rows }, () => new Uint16Array(cols));
+
+  for (let i = oldTexts.length - 1; i >= 0; i -= 1) {
+    for (let j = texts.length - 1; j >= 0; j -= 1) {
+      dp[i][j] = oldTexts[i] === texts[j]
+        ? dp[i + 1][j + 1] + 1
+        : Math.max(dp[i + 1][j], dp[i][j + 1]);
+    }
+  }
+
+  const matches = [];
+  let i = 0;
+  let j = 0;
+  while (i < oldTexts.length && j < texts.length) {
+    if (oldTexts[i] === texts[j]) {
+      matches.push([i, j]);
+      i += 1;
+      j += 1;
+    } else if (dp[i + 1][j] >= dp[i][j + 1]) {
+      i += 1;
+    } else {
+      j += 1;
+    }
+  }
+
+  const result = new Array(texts.length);
+  const anchors = [[-1, -1], ...matches, [old.length, texts.length]];
+
+  for (let anchorIndex = 0; anchorIndex < anchors.length - 1; anchorIndex += 1) {
+    const [oldStart, newStart] = anchors[anchorIndex];
+    const [oldEnd, newEnd] = anchors[anchorIndex + 1];
+    const oldGap = old.slice(oldStart + 1, oldEnd);
+    const newGapStart = newStart + 1;
+    const newGapLength = newEnd - newGapStart;
+
+    for (let offset = 0; offset < newGapLength; offset += 1) {
+      result[newGapStart + offset] = {
+        id: oldGap[offset]?.id || createId('paragraph'),
+        text: texts[newGapStart + offset]
+      };
+    }
+
+    if (oldEnd < old.length && newEnd < texts.length) {
+      result[newEnd] = { id: old[oldEnd].id, text: texts[newEnd] };
+    }
+  }
+
+  const usedIds = new Set();
+  return result.map((record, index) => {
+    let id = record?.id || createId('paragraph');
+    if (usedIds.has(id)) id = createId('paragraph');
+    usedIds.add(id);
+    return { id, text: texts[index] };
+  });
+}
+
+function syncParagraphRecordsFromBody() {
+  paragraphRecords = reconcileParagraphRecords(paragraphRecords, els.bodyInput.value);
+  const validIds = new Set(paragraphRecords.map((record) => record.id));
+  paragraphOverrides = normalizeParagraphOverrides(paragraphOverrides, validIds);
+  if (selectedParagraphId && !validIds.has(selectedParagraphId)) selectedParagraphId = null;
+}
+
+function normalizeParagraphOverrides(raw, validIds = null) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  const normalized = {};
+
+  Object.entries(raw).forEach(([paragraphId, value]) => {
+    if (validIds && !validIds.has(paragraphId)) return;
+    const override = normalizeParagraphOverride(value);
+    if (hasMeaningfulOverride(override)) normalized[paragraphId] = override;
+  });
+
+  return normalized;
+}
+
+function normalizeParagraphOverride(raw) {
+  const source = raw && typeof raw === 'object' ? raw : {};
+  const normalized = {};
+  ['fontSize', 'lineHeight', 'letterSpacing', 'spaceBefore', 'spaceAfter'].forEach((key) => {
+    const value = Number(source[key]);
+    if (source[key] !== '' && source[key] !== null && source[key] !== undefined && Number.isFinite(value)) {
+      normalized[key] = value;
+    }
+  });
+
+  if (['justify', 'left', 'center', 'right'].includes(source.textAlign)) {
+    normalized.textAlign = source.textAlign;
+  }
+  if (source.pageBreakBefore === true) normalized.pageBreakBefore = true;
+  if (source.keepWithNext === true) normalized.keepWithNext = true;
+  return normalized;
+}
+
+function hasMeaningfulOverride(override) {
+  return Boolean(override && typeof override === 'object' && Object.keys(override).length > 0);
+}
+
+function selectParagraph(paragraphId, shouldScroll = true) {
+  const index = paragraphRecords.findIndex((record) => record.id === paragraphId);
+  if (index < 0) return;
+  selectedParagraphId = paragraphId;
+  updateParagraphControls();
+  updateParagraphSelectionHighlight();
+
+  if (shouldScroll) {
+    const target = els.pages.querySelector(`.body-paragraph[data-paragraph-id="${CSS.escape(paragraphId)}"]`);
+    target?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+  }
+}
+
+function navigateSelectedParagraph(direction) {
+  if (!paragraphRecords.length) return;
+  const currentIndex = paragraphRecords.findIndex((record) => record.id === selectedParagraphId);
+  const nextIndex = Math.min(
+    paragraphRecords.length - 1,
+    Math.max(0, (currentIndex < 0 ? 0 : currentIndex) + direction)
+  );
+  selectParagraph(paragraphRecords[nextIndex].id, true);
+}
+
+function updateParagraphControls() {
+  const index = paragraphRecords.findIndex((record) => record.id === selectedParagraphId);
+  const hasSelection = index >= 0;
+  els.paragraphSettingsFieldset.classList.toggle('empty', !hasSelection);
+  els.paragraphEmptyState.hidden = hasSelection;
+  els.paragraphControls.hidden = !hasSelection;
+
+  if (!hasSelection) return;
+
+  const record = paragraphRecords[index];
+  const override = normalizeParagraphOverride(paragraphOverrides[record.id]);
+  isApplyingParagraphControls = true;
+  try {
+    els.selectedParagraphLabel.textContent = `第${index + 1}段落${hasMeaningfulOverride(override) ? '・個別設定あり' : ''}`;
+    els.selectedParagraphExcerpt.textContent = record.text;
+    els.paragraphFontSize.value = Number.isFinite(override.fontSize) ? String(override.fontSize) : '';
+    els.paragraphLineHeight.value = Number.isFinite(override.lineHeight) ? String(override.lineHeight) : '';
+    els.paragraphLetterSpacing.value = Number.isFinite(override.letterSpacing) ? String(override.letterSpacing) : '';
+    els.paragraphSpaceBefore.value = Number.isFinite(override.spaceBefore) ? String(override.spaceBefore) : '';
+    els.paragraphSpaceAfter.value = Number.isFinite(override.spaceAfter) ? String(override.spaceAfter) : '';
+    els.paragraphTextAlign.value = override.textAlign || 'inherit';
+    els.paragraphPageBreakBefore.checked = Boolean(override.pageBreakBefore);
+    els.paragraphKeepWithNext.checked = Boolean(override.keepWithNext);
+    els.previousParagraphBtn.disabled = index === 0;
+    els.nextParagraphBtn.disabled = index === paragraphRecords.length - 1;
+    els.paragraphKeepWithNext.disabled = index === paragraphRecords.length - 1;
+  } finally {
+    isApplyingParagraphControls = false;
+  }
+}
+
+function updateSelectedParagraphOverride() {
+  if (isApplyingParagraphControls || !selectedParagraphId) return;
+  const override = {};
+  setOptionalNumber(override, 'fontSize', els.paragraphFontSize.value);
+  setOptionalNumber(override, 'lineHeight', els.paragraphLineHeight.value);
+  setOptionalNumber(override, 'letterSpacing', els.paragraphLetterSpacing.value);
+  setOptionalNumber(override, 'spaceBefore', els.paragraphSpaceBefore.value);
+  setOptionalNumber(override, 'spaceAfter', els.paragraphSpaceAfter.value);
+  if (els.paragraphTextAlign.value !== 'inherit') override.textAlign = els.paragraphTextAlign.value;
+  if (els.paragraphPageBreakBefore.checked) override.pageBreakBefore = true;
+  if (els.paragraphKeepWithNext.checked) override.keepWithNext = true;
+
+  if (hasMeaningfulOverride(override)) paragraphOverrides[selectedParagraphId] = override;
+  else delete paragraphOverrides[selectedParagraphId];
+
+  updateParagraphControls();
+  markDirty();
+  scheduleRender();
+  scheduleAutosave();
+}
+
+function setOptionalNumber(target, key, rawValue) {
+  if (String(rawValue).trim() === '') return;
+  const number = Number(rawValue);
+  if (Number.isFinite(number)) target[key] = number;
+}
+
+function resetSelectedParagraphOverride() {
+  if (!selectedParagraphId) return;
+  delete paragraphOverrides[selectedParagraphId];
+  updateParagraphControls();
+  markDirty();
+  scheduleRender();
+  scheduleAutosave();
+  showToast('選択中の段落を本文全体の設定へ戻しました。');
+}
+
+function updateParagraphSelectionHighlight() {
+  els.pages.querySelectorAll('.body-paragraph[data-paragraph-id]').forEach((paragraph) => {
+    paragraph.classList.toggle('selected-paragraph', paragraph.dataset.paragraphId === selectedParagraphId);
+  });
 }
 
 function createNewProject(requireConfirmation = true, saveExisting = true) {
   if (requireConfirmation && !window.confirm('新しいプロジェクトを作成しますか？現在の内容は自動保存されます。')) return;
   if (saveExisting) saveCurrentProject(false);
 
-  const blank = {
+  const blank = normalizeState({
     projectName: '新規組版データ',
-    manuscript: { title: '', subtitle: '', author: '', body: '' },
+    manuscript: { title: '', subtitle: '', author: '', body: '', paragraphs: [] },
+    paragraphOverrides: {},
     settings: deepClone(DEFAULT_SETTINGS),
     metadata: {}
-  };
+  });
   assignNewProjectMetadata(blank);
   currentProjectId = blank.metadata.projectId;
   currentProjectCreatedAt = blank.metadata.createdAt;
