@@ -1,20 +1,20 @@
 'use strict';
 
-const APP_VERSION = 'v010';
-const SCHEMA_VERSION = 10;
+const APP_VERSION = 'v011';
+const SCHEMA_VERSION = 11;
 const AUTOSAVE_DELAY = 700;
 
-const PROJECT_INDEX_KEY = 'typesetting-app-v010-project-index';
-const PROJECT_PREFIX = 'typesetting-app-v010-project:';
-const CURRENT_PROJECT_KEY = 'typesetting-app-v010-current-project';
-const TEMPLATE_STORAGE_KEY = 'typesetting-app-v010-templates';
+const PROJECT_INDEX_KEY = 'typesetting-app-v011-project-index';
+const PROJECT_PREFIX = 'typesetting-app-v011-project:';
+const CURRENT_PROJECT_KEY = 'typesetting-app-v011-current-project';
+const TEMPLATE_STORAGE_KEY = 'typesetting-app-v011-templates';
 
-const LEGACY_V9_PROJECT_INDEX_KEY = 'typesetting-app-v009-project-index';
-const LEGACY_V9_PROJECT_PREFIX = 'typesetting-app-v009-project:';
-const LEGACY_V9_CURRENT_PROJECT_KEY = 'typesetting-app-v009-current-project';
-const LEGACY_V9_TEMPLATE_STORAGE_KEY = 'typesetting-app-v009-templates';
+const LEGACY_V10_PROJECT_INDEX_KEY = 'typesetting-app-v010-project-index';
+const LEGACY_V10_PROJECT_PREFIX = 'typesetting-app-v010-project:';
+const LEGACY_V10_CURRENT_PROJECT_KEY = 'typesetting-app-v010-current-project';
+const LEGACY_V10_TEMPLATE_STORAGE_KEY = 'typesetting-app-v010-templates';
 const LEGACY_V1_STORAGE_KEY = 'typesetting-app-v001';
-const MIGRATION_MARKER_KEY = 'typesetting-app-v010-migration-complete';
+const MIGRATION_MARKER_KEY = 'typesetting-app-v011-migration-complete';
 
 const DEFAULT_SETTINGS = Object.freeze({
   paperPreset: 'A5',
@@ -33,6 +33,11 @@ const DEFAULT_SETTINGS = Object.freeze({
   textAlign: 'justify',
   preserveBlankLines: true,
   blankLineScale: 1,
+  lineBreakMode: 'strict',
+  hangingPunctuation: true,
+  preventWidowOrphan: true,
+  minFragmentLines: 2,
+  keepWithNextLines: 2,
   titleSize: 20,
   titleBottom: 14,
   titleAlign: 'center',
@@ -90,11 +95,11 @@ const DEFAULT_SETTINGS = Object.freeze({
 
 const SAMPLE_MANUSCRIPT = Object.freeze({
   title: 'サンプルタイトル',
-  subtitle: '自動目次と直接PDF出力の確認用原稿',
+  subtitle: '日本語組版ルールと直接PDF出力の確認用原稿',
   author: '著者名',
-  body: `# 第1章　組版アプリv010
+  body: `# 第1章　組版アプリv011
 
-これは、組版アプリv010の動作確認用原稿です。
+これは、組版アプリv011の動作確認用原稿です。
 
 右側の設定を変更すると、用紙サイズ、余白、フォント、文字サイズ、文字間、行間が中央のプレビューへ自動反映されます。
 
@@ -112,11 +117,15 @@ const SAMPLE_MANUSCRIPT = Object.freeze({
 
 「目次を表示」をオンにすると、大見出し・中見出し・小見出しから目次を自動生成します。見出し名やページ位置を変更すると、目次も自動更新されます。
 
+## 日本語組版の調整
+
+行頭・行末の禁則処理、句読点のぶら下がり、ページをまたぐ段落の一行残りを抑える設定を追加しています。通常は「おすすめ設定」のままで使用できます。
+
 右上の「PDF保存」を押すと、目次を含む現在のページプレビューをそのままPDFとして直接保存できます。PCの印刷設定は使用しません。`
 });
 
 const DEFAULT_STATE = Object.freeze({
-  projectName: '組版アプリ v010 サンプル',
+  projectName: '組版アプリ v011 サンプル',
   manuscript: { ...SAMPLE_MANUSCRIPT, paragraphs: [], chapters: [] },
   paragraphOverrides: {},
   settings: DEFAULT_SETTINGS,
@@ -185,7 +194,7 @@ let manuscriptEditorMode = 'full';
 let chapterModel = [];
 let selectedChapterIndex = -1;
 let isApplyingChapterEdit = false;
-const MANUSCRIPT_MODE_KEY = 'typesetting-app-v010-manuscript-mode';
+const MANUSCRIPT_MODE_KEY = 'typesetting-app-v011-manuscript-mode';
 
 window.addEventListener('DOMContentLoaded', init);
 
@@ -203,6 +212,7 @@ function init() {
   restoreSettingsAccordions();
   updateRunningContentControls();
   updateTocControls();
+  updateJapaneseTypesettingControls();
   scheduleRender();
   refreshCurrentProjectStatus();
 }
@@ -214,7 +224,10 @@ function cacheElements() {
     'authorInput', 'bodyInput', 'charCount', 'pages', 'pageCount', 'saveStatus',
     'currentProjectStatus', 'paperPreset', 'pageWidth', 'pageHeight', 'marginTop',
     'marginBottom', 'marginLeft', 'marginRight', 'fontFamily', 'fontSize', 'lineHeight',
-    'letterSpacing', 'useTextIndent', 'textIndent', 'textAlign', 'preserveBlankLines', 'blankLineScale', 'titleSize', 'titleBottom', 'titleAlign', 'showDocumentHeading', 'bodyStartOnNewPage',
+    'letterSpacing', 'useTextIndent', 'textIndent', 'textAlign', 'preserveBlankLines', 'blankLineScale',
+    'lineBreakMode', 'hangingPunctuation', 'preventWidowOrphan', 'minFragmentLines',
+    'keepWithNextLines', 'resetJapaneseTypesettingBtn', 'japaneseTypesettingSummary',
+    'titleSize', 'titleBottom', 'titleAlign', 'showDocumentHeading', 'bodyStartOnNewPage',
     'showPageNumbers', 'pageNumberStart', 'pageNumberPosition', 'firstPageNumber',
     'showHeader', 'headerContent', 'headerCustomText', 'headerPosition', 'headerFirstPage',
     'showFooterText', 'footerContent', 'footerCustomText', 'footerPosition', 'footerFirstPage',
@@ -256,6 +269,8 @@ function bindEvents() {
     els.pageWidth, els.pageHeight, els.marginTop, els.marginBottom, els.marginLeft,
     els.marginRight, els.fontFamily, els.fontSize, els.lineHeight, els.letterSpacing,
     els.useTextIndent, els.textIndent, els.textAlign, els.preserveBlankLines, els.blankLineScale,
+    els.lineBreakMode, els.hangingPunctuation, els.preventWidowOrphan, els.minFragmentLines,
+    els.keepWithNextLines,
     els.titleSize, els.titleBottom, els.titleAlign, els.showDocumentHeading, els.bodyStartOnNewPage,
     els.heading1FontFamily, els.heading1Size, els.heading1Align, els.heading1SpaceBefore,
     els.heading1SpaceAfter, els.heading1PageBreakBefore, els.heading1KeepWithNext,
@@ -318,6 +333,12 @@ function bindEvents() {
   els.showFooterText.addEventListener('change', updateRunningContentControls);
   els.showToc.addEventListener('change', updateTocControls);
   els.tocShowPageNumbers.addEventListener('change', updateTocControls);
+  els.preventWidowOrphan.addEventListener('change', updateJapaneseTypesettingControls);
+  els.lineBreakMode.addEventListener('change', updateJapaneseTypesettingControls);
+  els.hangingPunctuation.addEventListener('change', updateJapaneseTypesettingControls);
+  els.minFragmentLines.addEventListener('change', updateJapaneseTypesettingControls);
+  els.keepWithNextLines.addEventListener('change', updateJapaneseTypesettingControls);
+  els.resetJapaneseTypesettingBtn.addEventListener('click', applyRecommendedJapaneseTypesetting);
   els.settingsExpandAllBtn.addEventListener('click', () => setAllSettingsAccordions(true));
   els.settingsCollapseAllBtn.addEventListener('click', () => setAllSettingsAccordions(false));
   document.querySelectorAll('.settings-accordion').forEach((details) => {
@@ -418,7 +439,7 @@ function loadInitialProject() {
     applyState(migrated);
     saveCurrentProject(false);
     updateSaveStatus('v001データを移行済み');
-    showToast('v001の保存データをv010へ移行しました。');
+    showToast('v001の保存データをv011へ移行しました。');
     return;
   }
 
@@ -438,15 +459,15 @@ function migrateLegacyData() {
     return;
   }
 
-  const legacyIndex = readJsonFromStorage(LEGACY_V9_PROJECT_INDEX_KEY, []);
+  const legacyIndex = readJsonFromStorage(LEGACY_V10_PROJECT_INDEX_KEY, []);
   let migratedCount = 0;
   let mappedCurrentId = null;
-  const legacyCurrentId = safeStorageGet(LEGACY_V9_CURRENT_PROJECT_KEY);
+  const legacyCurrentId = safeStorageGet(LEGACY_V10_CURRENT_PROJECT_KEY);
 
   if (Array.isArray(legacyIndex)) {
     legacyIndex.forEach((item) => {
       if (!item?.id) return;
-      const raw = readJsonFromStorage(`${LEGACY_V9_PROJECT_PREFIX}${item.id}`, null);
+      const raw = readJsonFromStorage(`${LEGACY_V10_PROJECT_PREFIX}${item.id}`, null);
       if (!raw) return;
       const state = normalizeState(raw);
       state.metadata.appVersion = APP_VERSION;
@@ -460,7 +481,7 @@ function migrateLegacyData() {
     });
   }
 
-  const legacyTemplates = readJsonFromStorage(LEGACY_V9_TEMPLATE_STORAGE_KEY, []);
+  const legacyTemplates = readJsonFromStorage(LEGACY_V10_TEMPLATE_STORAGE_KEY, []);
   if (Array.isArray(legacyTemplates) && legacyTemplates.length) {
     safeStorageSet(TEMPLATE_STORAGE_KEY, JSON.stringify(legacyTemplates));
   }
@@ -469,7 +490,7 @@ function migrateLegacyData() {
   safeStorageSet(MIGRATION_MARKER_KEY, 'true');
 
   if (migratedCount > 0) {
-    showToast(`v009のプロジェクト${migratedCount}件をv010へ移行しました。`);
+    showToast(`v010のプロジェクト${migratedCount}件をv011へ移行しました。`);
   }
 }
 
@@ -871,11 +892,11 @@ function saveSettingsAccordionState() {
     const key = details.id || `section-${index}`;
     state[key] = details.open;
   });
-  safeStorageSet('typesetting-app-v010-settings-ui', JSON.stringify(state));
+  safeStorageSet('typesetting-app-v011-settings-ui', JSON.stringify(state));
 }
 
 function restoreSettingsAccordions() {
-  const state = readJsonFromStorage('typesetting-app-v010-settings-ui', null);
+  const state = readJsonFromStorage('typesetting-app-v011-settings-ui', null);
   if (!state || typeof state !== 'object') return;
   document.querySelectorAll('.settings-accordion').forEach((details, index) => {
     const key = details.id || `section-${index}`;
@@ -930,6 +951,33 @@ function updateTocDetectedSummary(state = null) {
   const selectedCount = selected.reduce((sum, level) => sum + counts[level - 1], 0);
   const breakdown = [`大${counts[0]}`, `中${counts[1]}`, `小${counts[2]}`].join('・');
   els.tocDetectedSummary.textContent = `検出：${breakdown} ／ 目次対象 ${selectedCount}件`;
+}
+
+function updateJapaneseTypesettingControls() {
+  const enabled = Boolean(els.preventWidowOrphan?.checked);
+  if (els.minFragmentLines) els.minFragmentLines.disabled = !enabled;
+
+  if (els.japaneseTypesettingSummary) {
+    const lineBreakLabel = els.lineBreakMode?.value === 'strict' ? '禁則：厳密' : '禁則：標準';
+    const hangingLabel = els.hangingPunctuation?.checked ? 'ぶら下がり：有効' : 'ぶら下がり：無効';
+    const splitLabel = enabled
+      ? `一行残り防止：${Math.max(2, Math.trunc(sanitizeNumber(els.minFragmentLines?.value, 2)))}行`
+      : '一行残り防止：無効';
+    els.japaneseTypesettingSummary.textContent = `${lineBreakLabel} ／ ${hangingLabel} ／ ${splitLabel}`;
+  }
+}
+
+function applyRecommendedJapaneseTypesetting() {
+  els.lineBreakMode.value = 'strict';
+  els.hangingPunctuation.checked = true;
+  els.preventWidowOrphan.checked = true;
+  els.minFragmentLines.value = '2';
+  els.keepWithNextLines.value = '2';
+  updateJapaneseTypesettingControls();
+  markDirty();
+  scheduleRender();
+  scheduleAutosave();
+  showToast('日本語組版をおすすめ設定に戻しました。');
 }
 
 function handlePresetChange() {
@@ -1199,7 +1247,7 @@ function paginate(state) {
 
     if (headingSettings.keepWithNext && nextRecord && content.childElementCount > 0) {
       const headingProbe = createBodyHeadingElement(record, state.settings, { blankLinesBefore });
-      const nextProbe = createKeepWithNextProbe(nextRecord, state);
+      const nextProbe = createKeepWithNextProbe(nextRecord, state, state.settings.keepWithNextLines);
       content.append(headingProbe, nextProbe);
       const pairFits = fits(content);
       headingProbe.remove();
@@ -1239,7 +1287,7 @@ function paginate(state) {
         settings: state.settings,
         isFinal: true
       });
-      const nextProbe = createKeepWithNextProbe(nextRecord, state);
+      const nextProbe = createKeepWithNextProbe(nextRecord, state, state.settings.keepWithNextLines);
       content.append(currentProbe, nextProbe);
       const pairFits = fits(content);
       currentProbe.remove();
@@ -1277,7 +1325,7 @@ function paginate(state) {
       }
 
       fullParagraph.remove();
-      const splitIndex = findFittingLength(
+      let splitIndex = findFittingLength(
         content,
         remaining,
         isContinuation,
@@ -1285,6 +1333,20 @@ function paginate(state) {
         fragmentBlankLines,
         state.settings
       );
+
+      if (splitIndex > 0 && splitIndex < remaining.length && state.settings.preventWidowOrphan) {
+        const balanced = balanceParagraphSplit(remaining, splitIndex, {
+          continuation: isContinuation,
+          override,
+          blankLinesBefore: fragmentBlankLines,
+          settings: state.settings
+        });
+        if (balanced.moveWhole && content.childElementCount > 0) {
+          startNewPage();
+          continue;
+        }
+        splitIndex = balanced.index;
+      }
 
       if (content.childElementCount > 0 && splitIndex >= remaining.length) {
         startNewPage();
@@ -1369,6 +1431,80 @@ function fits(content) {
   return content.scrollHeight <= content.clientHeight + 0.5;
 }
 
+function measureParagraphLineCount(text, options = {}) {
+  if (!String(text || '').length) return 0;
+
+  const paper = document.createElement('div');
+  paper.className = 'paper line-measure-paper';
+  const content = document.createElement('div');
+  content.className = 'page-content line-measure-content';
+  paper.appendChild(content);
+  els.measureRoot.appendChild(paper);
+
+  const paragraph = createParagraphElement(text, {
+    continuation: Boolean(options.continuation),
+    override: options.override || {},
+    blankLinesBefore: 0,
+    settings: options.settings || DEFAULT_SETTINGS,
+    isFinal: false
+  });
+  paragraph.style.paddingTop = '0';
+  paragraph.style.paddingBottom = '0';
+  content.appendChild(paragraph);
+
+  const computed = getComputedStyle(paragraph);
+  const lineHeight = parseFloat(computed.lineHeight) || sanitizeNumber(options.settings?.lineHeight, 15) * (96 / 72);
+  const height = paragraph.getBoundingClientRect().height;
+  paper.remove();
+  return Math.max(1, Math.round(height / Math.max(1, lineHeight)));
+}
+
+function balanceParagraphSplit(text, splitIndex, options = {}) {
+  const settings = { ...DEFAULT_SETTINGS, ...(options.settings || {}) };
+  const minimumLines = Math.max(1, Math.min(3, Math.trunc(sanitizeNumber(settings.minFragmentLines, 2))));
+  if (!settings.preventWidowOrphan || minimumLines <= 1 || splitIndex <= 0 || splitIndex >= text.length) {
+    return { index: splitIndex, moveWhole: false };
+  }
+
+  const headOptions = {
+    continuation: Boolean(options.continuation),
+    override: options.override || {},
+    settings
+  };
+  const tailOptions = {
+    continuation: true,
+    override: options.override || {},
+    settings
+  };
+  const headLines = measureParagraphLineCount(text.slice(0, splitIndex), headOptions);
+  if (headLines < minimumLines) return { index: splitIndex, moveWhole: true };
+
+  const tailLines = measureParagraphLineCount(text.slice(splitIndex), tailOptions);
+  if (tailLines >= minimumLines) return { index: splitIndex, moveWhole: false };
+
+  let low = Math.max(1, splitIndex - 500);
+  let high = splitIndex - 1;
+  let best = 0;
+  while (low <= high) {
+    const middle = Math.floor((low + high) / 2);
+    const lines = measureParagraphLineCount(text.slice(middle), tailOptions);
+    if (lines >= minimumLines) {
+      best = middle;
+      low = middle + 1;
+    } else {
+      high = middle - 1;
+    }
+  }
+
+  if (!best) return { index: splitIndex, moveWhole: false };
+  if (settings.lineBreakMode === 'strict') {
+    best = findSafeJapaneseBreak(text, best, 48) || best;
+  }
+  const balancedHeadLines = measureParagraphLineCount(text.slice(0, best), headOptions);
+  if (balancedHeadLines < minimumLines) return { index: splitIndex, moveWhole: true };
+  return { index: best, moveWhole: false };
+}
+
 function findFittingLength(content, text, continuation, override, blankLinesBefore, settings) {
   let low = 0;
   let high = text.length;
@@ -1395,19 +1531,48 @@ function findFittingLength(content, text, continuation, override, blankLinesBefo
     }
   }
 
-  return preferNaturalBreak(text, best);
+  return preferNaturalBreak(text, best, settings);
 }
 
-function preferNaturalBreak(text, index) {
+const JAPANESE_LINE_START_PROHIBITED = new Set(Array.from('、。，．？！‼⁇⁈⁉・：；)]）］｝〕〉》」』】〙〗〟’”»ァィゥェォッャュョヮヵヶーゝゞヽヾ々〻'));
+const JAPANESE_LINE_END_PROHIBITED = new Set(Array.from('([（［｛〔〈《「『【〘〖〝‘“«'));
+
+function preferNaturalBreak(text, index, settings = DEFAULT_SETTINGS) {
   if (index <= 1 || index >= text.length) return index;
   const windowStart = Math.max(1, index - 24);
   const candidate = text.slice(windowStart, index);
   const punctuation = ['。', '、', '！', '？', '」', '』', '）', '】', '》', '〉', '\n'];
+  let preferred = index;
 
   for (let i = candidate.length - 1; i >= 0; i -= 1) {
-    if (punctuation.includes(candidate[i])) return windowStart + i + 1;
+    if (punctuation.includes(candidate[i])) {
+      preferred = windowStart + i + 1;
+      break;
+    }
   }
-  return index;
+
+  if (settings.lineBreakMode !== 'strict') return preferred;
+  return findSafeJapaneseBreak(text, preferred, 48) || findSafeJapaneseBreak(text, index, 48) || preferred;
+}
+
+function isSafeJapaneseBreak(text, index) {
+  if (index <= 0 || index >= text.length) return true;
+  const previous = text[index - 1];
+  const next = text[index];
+  return !JAPANESE_LINE_END_PROHIBITED.has(previous) && !JAPANESE_LINE_START_PROHIBITED.has(next);
+}
+
+function findSafeJapaneseBreak(text, index, maxDistance = 64) {
+  const start = Math.min(text.length - 1, Math.max(1, index));
+  const lower = Math.max(1, start - maxDistance);
+  let fallback = 0;
+  for (let cursor = start; cursor >= lower; cursor -= 1) {
+    if (!isSafeJapaneseBreak(text, cursor)) continue;
+    if (!fallback) fallback = cursor;
+    const previous = text[cursor - 1];
+    if (/[_\s、。！？!?）」』】〉》]/u.test(previous)) return cursor;
+  }
+  return fallback;
 }
 
 function createHeadingElement(manuscript) {
@@ -1491,7 +1656,7 @@ function createBodyHeadingElement(record, settings = DEFAULT_SETTINGS, options =
   return heading;
 }
 
-function createKeepWithNextProbe(record, state) {
+function createKeepWithNextProbe(record, state, requiredLines = 1) {
   if (record.type === 'heading') {
     return createBodyHeadingElement(record, state.settings, {
       blankLinesBefore: state.settings.preserveBlankLines
@@ -1501,7 +1666,8 @@ function createKeepWithNextProbe(record, state) {
   }
 
   const override = normalizeParagraphOverride(state.paragraphOverrides?.[record.id]);
-  const excerpt = String(record.text || '').replace(/\n+/g, ' ').slice(0, 12) || '　';
+  const lineCount = Math.max(1, Math.min(3, Math.trunc(sanitizeNumber(requiredLines, 1))));
+  const excerpt = Array.from({ length: lineCount }, (_, index) => index === 0 ? 'あ' : 'い').join('\n');
   return createParagraphElement(excerpt, {
     override,
     blankLinesBefore: state.settings.preserveBlankLines
@@ -1812,6 +1978,8 @@ function applyCssVariables(settings) {
   const bodyIndent = settings.useTextIndent ? sanitizeNumber(settings.textIndent, 1) : 0;
   root.style.setProperty('--body-indent', `${bodyIndent}em`);
   root.style.setProperty('--body-align', settings.textAlign);
+  root.style.setProperty('--body-line-break', settings.lineBreakMode === 'strict' ? 'strict' : 'normal');
+  root.style.setProperty('--body-hanging-punctuation', settings.hangingPunctuation ? 'allow-end' : 'none');
   root.style.setProperty('--title-size', `${settings.titleSize}pt`);
   root.style.setProperty('--title-align', settings.titleAlign);
   root.style.setProperty('--title-bottom', `${settings.titleBottom}mm`);
@@ -1886,6 +2054,11 @@ function collectSettings() {
     textAlign: els.textAlign.value,
     preserveBlankLines: els.preserveBlankLines.checked,
     blankLineScale: sanitizeNumber(els.blankLineScale.value, 1),
+    lineBreakMode: els.lineBreakMode.value === 'normal' ? 'normal' : 'strict',
+    hangingPunctuation: els.hangingPunctuation.checked,
+    preventWidowOrphan: els.preventWidowOrphan.checked,
+    minFragmentLines: Math.max(1, Math.min(3, Math.trunc(sanitizeNumber(els.minFragmentLines.value, 2)))),
+    keepWithNextLines: Math.max(1, Math.min(3, Math.trunc(sanitizeNumber(els.keepWithNextLines.value, 2)))),
     titleSize: sanitizeNumber(els.titleSize.value, 20),
     titleBottom: sanitizeNumber(els.titleBottom.value, 14),
     titleAlign: els.titleAlign.value,
@@ -1989,6 +2162,12 @@ function applySettingsToInputs(settings) {
   els.preserveBlankLines.checked = Boolean(normalized.preserveBlankLines);
   els.blankLineScale.value = normalized.blankLineScale;
   updateBlankLineControls();
+  els.lineBreakMode.value = normalized.lineBreakMode === 'normal' ? 'normal' : 'strict';
+  els.hangingPunctuation.checked = Boolean(normalized.hangingPunctuation);
+  els.preventWidowOrphan.checked = Boolean(normalized.preventWidowOrphan);
+  els.minFragmentLines.value = String(Math.max(1, Math.min(3, Math.trunc(sanitizeNumber(normalized.minFragmentLines, 2)))));
+  els.keepWithNextLines.value = String(Math.max(1, Math.min(3, Math.trunc(sanitizeNumber(normalized.keepWithNextLines, 2)))));
+  updateJapaneseTypesettingControls();
   els.titleSize.value = normalized.titleSize;
   els.titleBottom.value = normalized.titleBottom;
   els.titleAlign.value = normalized.titleAlign;

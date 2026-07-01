@@ -364,10 +364,10 @@ h2 {
   line-height: var(--body-leading);
   letter-spacing: var(--body-tracking);
   text-align: var(--body-align);
-  line-break: strict;
+  line-break: var(--body-line-break, strict);
   overflow-wrap: anywhere;
   word-break: normal;
-  hanging-punctuation: allow-end;
+  hanging-punctuation: var(--body-hanging-punctuation, allow-end);
   text-rendering: optimizeLegibility;
 }
 
@@ -1910,3 +1910,48 @@ body.pdf-exporting {
 
 .toc-entry.toc-no-leader { grid-template-columns: minmax(0, 1fr) auto; }
 .toc-entry.toc-no-page-number { display: block; }
+
+
+/* v011: Japanese typesetting controls */
+.japanese-typesetting-accordion {
+  border-color: #b8cbbf;
+}
+
+.japanese-feature-card {
+  background: linear-gradient(135deg, #f0f6f2, #f8fbf9);
+  border-color: #cbdcd1;
+}
+
+.japanese-summary {
+  margin: 10px 0 12px;
+  padding: 8px 10px;
+  color: #385149;
+  background: #f4f8f5;
+  border: 1px solid #dce8e0;
+  border-radius: 7px;
+  font-weight: 700;
+  line-height: 1.55;
+}
+
+.japanese-reset-button {
+  width: 100%;
+  margin-top: 5px;
+  color: #365047;
+  background: #eef5f0;
+  border: 1px solid #c9dacf;
+}
+
+.japanese-reset-button:hover {
+  background: #e5efe9;
+}
+
+.line-measure-paper {
+  position: absolute;
+  top: 0;
+  left: calc(var(--page-width) + 20px);
+  box-shadow: none;
+}
+
+.line-measure-content {
+  overflow: visible;
+}

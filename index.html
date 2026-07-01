@@ -4,8 +4,8 @@
 <head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1" name="viewport"/>
-<meta content="出版社向け簡易組版アプリ v010" name="description"/>
-<title>組版アプリ v010</title>
+<meta content="出版社向け簡易組版アプリ v011" name="description"/>
+<title>組版アプリ v011</title>
 <link href="styles.css" rel="stylesheet"/>
 <link rel="icon" href="data:,">
 </head>
@@ -14,7 +14,7 @@
 <header class="topbar">
 <div class="brand-block">
 <strong>組版アプリ</strong>
-<span class="version-badge">v010</span>
+<span class="version-badge">v011</span>
 </div>
 <label class="project-name-wrap">
 <span>プロジェクト名</span>
@@ -54,7 +54,7 @@
       </label>
       <label class="field compact-gap">
         <span>サブタイトル</span>
-        <input id="subtitleInput" placeholder="不要な場合は空欄" type="text" value="自動目次と直接PDF出力の確認用原稿"/>
+        <input id="subtitleInput" placeholder="不要な場合は空欄" type="text" value="日本語組版ルールと直接PDF出力の確認用原稿"/>
       </label>
       <label class="field compact-gap no-margin">
         <span>著者名</span>
@@ -92,9 +92,9 @@
       </div>
       <label class="field body-field full-body-field">
         <span>本文全体</span>
-        <textarea id="bodyInput" placeholder="ここに本文を貼り付けてください。" spellcheck="false"># 第1章　組版アプリv010
+        <textarea id="bodyInput" placeholder="ここに本文を貼り付けてください。" spellcheck="false"># 第1章　組版アプリv011
 
-これは、組版アプリv010の動作確認用原稿です。
+これは、組版アプリv011の動作確認用原稿です。
 
 右側の設定を変更すると、用紙サイズ、余白、フォント、文字サイズ、文字間、行間が中央のプレビューへ自動反映されます。
 
@@ -111,6 +111,10 @@
 章の追加、複製、削除、並び替えにも対応しています。JSON出力はバックアップや別端末への移動に使用してください。
 
 「目次を表示」をオンにすると、大見出し・中見出し・小見出しから目次を自動生成します。見出し名やページ位置を変更すると、目次も自動更新されます。
+
+## 日本語組版の調整
+
+行頭・行末の禁則処理、句読点のぶら下がり、ページをまたぐ段落の一行残りを抑える設定を追加しています。通常は「おすすめ設定」のままで使用できます。
 
 右上の「PDF保存」を押すと、目次を含む現在のページプレビューをそのままPDFとして直接保存できます。PCの印刷設定は使用しません。</textarea>
       </label>
@@ -389,6 +393,48 @@
 </label>
 <p class="helper-text">通常は1.0です。空行を少し詰める場合は0.8などに変更できます。</p>
 </div></details>
+<details class="settings-accordion japanese-typesetting-accordion" open><summary><span class="settings-summary-title">日本語組版</span><span class="settings-summary-hint">おすすめ設定あり</span></summary><div class="settings-accordion-body">
+<div class="feature-intro-card japanese-feature-card">
+<strong>読みづらい改行を自動で抑えます</strong>
+<p>通常は初期設定のままで使用できます。細かな調整が必要な場合だけ変更してください。</p>
+</div>
+<p class="helper-text japanese-summary" id="japaneseTypesettingSummary">禁則：厳密 ／ ぶら下がり：有効 ／ 一行残り防止：2行</p>
+<label class="field">
+<span>行頭・行末の禁則処理</span>
+<select id="lineBreakMode">
+<option selected value="strict">厳密（出版物向け・おすすめ）</option>
+<option value="normal">標準（Web文書に近い）</option>
+</select>
+</label>
+<label class="check-row">
+<input checked id="hangingPunctuation" type="checkbox"/>
+<span>句読点を行末へぶら下げる</span>
+</label>
+<label class="check-row primary-check">
+<input checked id="preventWidowOrphan" type="checkbox"/>
+<span>段落の1行だけがページ上下に残るのを抑える</span>
+</label>
+<div class="field-grid two">
+<label class="field compact">
+<span>ページ上下に残す最低行数</span>
+<select id="minFragmentLines">
+<option value="1">1行（制御しない）</option>
+<option selected value="2">2行（おすすめ）</option>
+<option value="3">3行（ゆったり）</option>
+</select>
+</label>
+<label class="field compact">
+<span>見出し後に確保する本文</span>
+<select id="keepWithNextLines">
+<option value="1">1行</option>
+<option selected value="2">2行（おすすめ）</option>
+<option value="3">3行</option>
+</select>
+</label>
+</div>
+<p class="helper-text">見出し側の「直後の本文と同じページに置く」がオンの場合、ここで指定した行数を確保します。</p>
+<button class="button japanese-reset-button" id="resetJapaneseTypesettingBtn" type="button">おすすめ設定に戻す</button>
+</div></details>
 <details class="settings-accordion"><summary><span class="settings-summary-title">本文内見出し</span><span class="settings-summary-hint">開閉</span></summary><div class="settings-accordion-body">
 
 <p class="helper-text heading-syntax-note"><code># 大見出し</code>　<code>## 中見出し</code>　<code>### 小見出し</code><br/>入力した空行は、見出し前後の余白に追加されます。</p>
@@ -579,7 +625,7 @@
 </label>
 <button class="button modal-primary" id="saveTemplateBtn" type="button">現在の設定を保存</button>
 </div>
-<p class="helper-text template-note">テンプレートには用紙、余白、本文、見出し、タイトル、目次、ページ設定だけを保存します。原稿内容は含まれません。</p>
+<p class="helper-text template-note">テンプレートには用紙、余白、本文、日本語組版、見出し、タイトル、目次、ページ設定だけを保存します。原稿内容は含まれません。</p>
 <div class="library-list" id="templateList"></div>
 </section>
 </div>
