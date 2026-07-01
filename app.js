@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = 'v019';
+const APP_VERSION = 'v019.1';
 const SCHEMA_VERSION = 19;
 const AUTOSAVE_DELAY = 700;
 const MAX_MEDIA_ASSETS = 20;
@@ -4719,21 +4719,12 @@ async function exportPdf(pageRange = null) {
       stage.replaceChildren(clone);
       await waitForFrames(1);
 
-      const canvas = await html2canvasRenderer(clone, {
-        backgroundColor: '#ffffff',
-        scale: renderScale,
-        useCORS: true,
-        allowTaint: false,
-        logging: false,
-        removeContainer: true,
-        imageTimeout: 15000,
-        width: clone.offsetWidth,
-        height: clone.offsetHeight,
-        windowWidth: clone.offsetWidth,
-        windowHeight: clone.offsetHeight,
-        scrollX: 0,
-        scrollY: 0
-      });
+      const canvas = await renderPdfPageCanvas(
+        html2canvasRenderer,
+        clone,
+        renderScale,
+        isVerticalWriting(state.settings)
+      );
 
       if (index > 0) pdf.addPage([pageWidth, pageHeight], orientation);
       let imageData = canvas.toDataURL('image/jpeg', 0.96);
@@ -4794,6 +4785,40 @@ function preparePaperCloneForPdf(sourcePaper) {
     element.classList.remove('selected-paragraph', 'has-override');
   });
   return clone;
+}
+
+async function renderPdfPageCanvas(renderer, clone, scale, verticalWriting) {
+  const options = {
+    backgroundColor: '#ffffff',
+    scale,
+    useCORS: true,
+    allowTaint: false,
+    logging: false,
+    removeContainer: true,
+    imageTimeout: 15000,
+    width: clone.offsetWidth,
+    height: clone.offsetHeight,
+    windowWidth: clone.offsetWidth,
+    windowHeight: clone.offsetHeight,
+    scrollX: 0,
+    scrollY: 0
+  };
+
+  if (!verticalWriting) {
+    return renderer(clone, { ...options, foreignObjectRendering: false });
+  }
+
+  // html2canvasの通常描画は縦書きの約物・英数字・縦中横を
+  // 横書き用のCanvas座標で処理するため、PDFで位置ずれが起きる。
+  // 縦書きページのみブラウザ自身の描画結果をSVG foreignObject経由で取得する。
+  clone.classList.add('pdf-vertical-native-render');
+  try {
+    return await renderer(clone, { ...options, foreignObjectRendering: true });
+  } catch (error) {
+    console.warn('縦書き用PDF描画を通常方式へ切り替えました。', error);
+    clone.classList.remove('pdf-vertical-native-render');
+    return renderer(clone, { ...options, foreignObjectRendering: false });
+  }
 }
 
 function setPdfExportBusy(busy, status = '', progress = 0) {

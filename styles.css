@@ -3031,3 +3031,19 @@ html, body { min-width: 960px; }
   .editing-tools-footer .button { width:100%; }
   .page-quick-nav { display:none; }
 }
+
+
+/* v019.1: browser-native vertical glyph rendering during direct PDF export */
+.pdf-export-stage .pdf-vertical-native-render,
+.pdf-export-stage .pdf-vertical-native-render .page-content.writing-vertical {
+  writing-mode: vertical-rl !important;
+  text-orientation: var(--text-orientation, mixed) !important;
+  font-feature-settings: "vert" 1, "vrt2" 1, "palt" 1 !important;
+  text-rendering: geometricPrecision;
+}
+
+.pdf-export-stage .pdf-vertical-native-render .tate-chu-yoko {
+  writing-mode: horizontal-tb !important;
+  text-orientation: mixed !important;
+  text-combine-upright: all !important;
+}
