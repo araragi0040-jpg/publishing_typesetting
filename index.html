@@ -4,8 +4,8 @@
 <head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1" name="viewport"/>
-<meta content="出版社向け簡易組版アプリ v013" name="description"/>
-<title>組版アプリ v013</title>
+<meta content="出版社向け簡易組版アプリ v014" name="description"/>
+<title>組版アプリ v014</title>
 <link href="styles.css" rel="stylesheet"/>
 <link rel="icon" href="data:,">
 </head>
@@ -14,7 +14,7 @@
 <header class="topbar">
 <div class="brand-block">
 <strong>組版アプリ</strong>
-<span class="version-badge">v013</span>
+<span class="version-badge">v014</span>
 </div>
 <label class="project-name-wrap">
 <span>プロジェクト名</span>
@@ -91,11 +91,26 @@
         <button class="mini-action" id="insertHeading2Btn" type="button" title="中見出し">中見出し</button>
         <button class="mini-action" id="insertHeading3Btn" type="button" title="小見出し">小見出し</button>
       </div>
+      <div class="inline-format-toolbar" data-format-target="bodyInput" aria-label="文字装飾">
+        <div class="inline-format-copy">
+          <strong>文字装飾</strong>
+          <span>文字を選択して適用</span>
+        </div>
+        <div class="inline-format-actions">
+          <button class="format-action" data-inline-format="bold" type="button" title="選択した文字を太字にする"><b>B</b><span>太字</span></button>
+          <button class="format-action" data-inline-format="emphasis" type="button" title="選択した文字に傍点を付ける"><span class="format-symbol emphasis-symbol">﹅</span><span>傍点</span></button>
+          <button class="format-action" data-inline-format="ruby" type="button" title="選択した文字にルビを付ける"><span class="format-symbol ruby-symbol">ル</span><span>ルビ</span></button>
+          <button class="format-action" data-inline-format="underline" type="button" title="選択した文字に下線を付ける"><u>U</u><span>下線</span></button>
+          <button class="format-action subtle" data-inline-format="clear" type="button" title="選択範囲の装飾を解除"><span class="format-symbol">×</span><span>解除</span></button>
+        </div>
+      </div>
       <label class="field body-field full-body-field">
         <span>本文全体</span>
-        <textarea id="bodyInput" placeholder="ここに本文を貼り付けてください。" spellcheck="false"># 第1章　組版アプリv013
+        <textarea id="bodyInput" placeholder="ここに本文を貼り付けてください。" spellcheck="false"># 第1章　組版アプリv014
 
-これは、組版アプリv013の動作確認用原稿です。用紙設定から「縦書き・右綴じ」へ切り替えると、同じ原稿を縦書きで確認できます。
+これは、組版アプリv014の動作確認用原稿です。用紙設定から「縦書き・右綴じ」へ切り替えると、同じ原稿を縦書きで確認できます。
+
+文字を選択して、**太字**、《《傍点》》、｜組版《くみはん》、__下線__を設定できます。記号はプレビューやPDFには表示されません。
 
 右側の設定を変更すると、用紙サイズ、余白、フォント、文字サイズ、文字間、行間が中央のプレビューへ自動反映されます。
 
@@ -119,10 +134,16 @@
 
 右上の「PDF保存」を押すと、横書き・縦書きとも現在のページプレビューをそのままPDFとして直接保存できます。PCの印刷設定は使用しません。</textarea>
       </label>
-      <div class="input-help-card">
-        <strong>見出しの書き方</strong>
-        <span><code># 大見出し</code>　<code>## 中見出し</code>　<code>### 小見出し</code></span>
-        <small>記号と文字の間に半角スペースを入れます。ボタンからも設定できます。</small>
+      <div class="input-help-card manuscript-syntax-help">
+        <div>
+          <strong>見出しの書き方</strong>
+          <span><code># 大見出し</code>　<code>## 中見出し</code>　<code>### 小見出し</code></span>
+        </div>
+        <div>
+          <strong>文字装飾の記法</strong>
+          <span><code>**太字**</code>　<code>《《傍点》》</code>　<code>｜漢字《かんじ》</code>　<code>__下線__</code></span>
+        </div>
+        <small>通常は文字を選択して上のボタンを押してください。記号はプレビュー・PDFには表示されません。</small>
       </div>
     </div>
 
@@ -162,6 +183,19 @@
             <span>章タイトル</span>
             <input id="chapterTitleInput" maxlength="160" placeholder="例：第1章　はじめに" type="text"/>
           </label>
+          <div class="inline-format-toolbar chapter-format-toolbar" data-format-target="chapterBodyInput" aria-label="章本文の文字装飾">
+            <div class="inline-format-copy">
+              <strong>文字装飾</strong>
+              <span>本文内の文字を選択</span>
+            </div>
+            <div class="inline-format-actions">
+              <button class="format-action" data-inline-format="bold" type="button"><b>B</b><span>太字</span></button>
+              <button class="format-action" data-inline-format="emphasis" type="button"><span class="format-symbol emphasis-symbol">﹅</span><span>傍点</span></button>
+              <button class="format-action" data-inline-format="ruby" type="button"><span class="format-symbol ruby-symbol">ル</span><span>ルビ</span></button>
+              <button class="format-action" data-inline-format="underline" type="button"><u>U</u><span>下線</span></button>
+              <button class="format-action subtle" data-inline-format="clear" type="button"><span class="format-symbol">×</span><span>解除</span></button>
+            </div>
+          </div>
           <label class="field chapter-body-field">
             <span>この章の本文</span>
             <textarea id="chapterBodyInput" placeholder="この章の本文を入力してください。中見出しは「## 」、小見出しは「### 」で入力できます。" spellcheck="false"></textarea>

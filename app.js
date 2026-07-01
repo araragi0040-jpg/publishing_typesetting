@@ -1,20 +1,20 @@
 'use strict';
 
-const APP_VERSION = 'v013';
-const SCHEMA_VERSION = 13;
+const APP_VERSION = 'v014';
+const SCHEMA_VERSION = 14;
 const AUTOSAVE_DELAY = 700;
 
-const PROJECT_INDEX_KEY = 'typesetting-app-v013-project-index';
-const PROJECT_PREFIX = 'typesetting-app-v013-project:';
-const CURRENT_PROJECT_KEY = 'typesetting-app-v013-current-project';
-const TEMPLATE_STORAGE_KEY = 'typesetting-app-v013-templates';
+const PROJECT_INDEX_KEY = 'typesetting-app-v014-project-index';
+const PROJECT_PREFIX = 'typesetting-app-v014-project:';
+const CURRENT_PROJECT_KEY = 'typesetting-app-v014-current-project';
+const TEMPLATE_STORAGE_KEY = 'typesetting-app-v014-templates';
 
-const LEGACY_V12_PROJECT_INDEX_KEY = 'typesetting-app-v012-project-index';
-const LEGACY_V12_PROJECT_PREFIX = 'typesetting-app-v012-project:';
-const LEGACY_V12_CURRENT_PROJECT_KEY = 'typesetting-app-v012-current-project';
-const LEGACY_V12_TEMPLATE_STORAGE_KEY = 'typesetting-app-v012-templates';
+const LEGACY_V13_PROJECT_INDEX_KEY = 'typesetting-app-v013-project-index';
+const LEGACY_V13_PROJECT_PREFIX = 'typesetting-app-v013-project:';
+const LEGACY_V13_CURRENT_PROJECT_KEY = 'typesetting-app-v013-current-project';
+const LEGACY_V13_TEMPLATE_STORAGE_KEY = 'typesetting-app-v013-templates';
 const LEGACY_V1_STORAGE_KEY = 'typesetting-app-v001';
-const MIGRATION_MARKER_KEY = 'typesetting-app-v013-migration-complete';
+const MIGRATION_MARKER_KEY = 'typesetting-app-v014-migration-complete';
 
 const DEFAULT_SETTINGS = Object.freeze({
   paperPreset: 'A5',
@@ -99,11 +99,13 @@ const DEFAULT_SETTINGS = Object.freeze({
 
 const SAMPLE_MANUSCRIPT = Object.freeze({
   title: 'サンプルタイトル',
-  subtitle: '縦書き・右綴じ対応の確認用原稿',
+  subtitle: '文字装飾・ルビ対応の確認用原稿',
   author: '著者名',
-  body: `# 第1章　組版アプリv013
+  body: `# 第1章　組版アプリv014
 
-これは、組版アプリv013の動作確認用原稿です。用紙設定から「縦書き・右綴じ」へ切り替えると、同じ原稿を縦書きで確認できます。
+これは、組版アプリv014の動作確認用原稿です。用紙設定から「縦書き・右綴じ」へ切り替えると、同じ原稿を縦書きで確認できます。
+
+文字を選択して、**太字**、《《傍点》》、｜組版《くみはん》、__下線__を設定できます。記号はプレビューやPDFには表示されません。
 
 右側の設定を変更すると、用紙サイズ、余白、フォント、文字サイズ、文字間、行間が中央のプレビューへ自動反映されます。
 
@@ -129,7 +131,7 @@ const SAMPLE_MANUSCRIPT = Object.freeze({
 });
 
 const DEFAULT_STATE = Object.freeze({
-  projectName: '組版アプリ v013 サンプル',
+  projectName: '組版アプリ v014 サンプル',
   manuscript: { ...SAMPLE_MANUSCRIPT, paragraphs: [], chapters: [] },
   paragraphOverrides: {},
   settings: DEFAULT_SETTINGS,
@@ -216,7 +218,7 @@ let manuscriptIssues = [];
 let manuscriptCheckFilter = 'all';
 let manuscriptCheckTimer = null;
 const MAX_MANUSCRIPT_ISSUES = 300;
-const MANUSCRIPT_MODE_KEY = 'typesetting-app-v013-manuscript-mode';
+const MANUSCRIPT_MODE_KEY = 'typesetting-app-v014-manuscript-mode';
 
 window.addEventListener('DOMContentLoaded', init);
 
@@ -346,6 +348,15 @@ function bindEvents() {
   els.insertHeading1Btn.addEventListener('click', () => applyHeadingToCurrentLines(1));
   els.insertHeading2Btn.addEventListener('click', () => applyHeadingToCurrentLines(2));
   els.insertHeading3Btn.addEventListener('click', () => applyHeadingToCurrentLines(3));
+  document.querySelectorAll('[data-inline-format]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const toolbar = button.closest('[data-format-target]');
+      applyInlineFormatting(button.dataset.inlineFormat, toolbar?.dataset.formatTarget);
+    });
+  });
+  [els.bodyInput, els.chapterBodyInput].forEach((textarea) => {
+    textarea.addEventListener('keydown', handleInlineFormattingShortcut);
+  });
   els.chapterList.addEventListener('click', handleChapterListClick);
   els.addChapterBtn.addEventListener('click', addChapter);
   els.addFirstChapterBtn.addEventListener('click', addChapter);
@@ -483,7 +494,7 @@ function loadInitialProject() {
     applyState(migrated);
     saveCurrentProject(false);
     updateSaveStatus('v001データを移行済み');
-    showToast('v001の保存データをv013へ移行しました。');
+    showToast('v001の保存データをv014へ移行しました。');
     return;
   }
 
@@ -503,15 +514,15 @@ function migrateLegacyData() {
     return;
   }
 
-  const legacyIndex = readJsonFromStorage(LEGACY_V12_PROJECT_INDEX_KEY, []);
+  const legacyIndex = readJsonFromStorage(LEGACY_V13_PROJECT_INDEX_KEY, []);
   let migratedCount = 0;
   let mappedCurrentId = null;
-  const legacyCurrentId = safeStorageGet(LEGACY_V12_CURRENT_PROJECT_KEY);
+  const legacyCurrentId = safeStorageGet(LEGACY_V13_CURRENT_PROJECT_KEY);
 
   if (Array.isArray(legacyIndex)) {
     legacyIndex.forEach((item) => {
       if (!item?.id) return;
-      const raw = readJsonFromStorage(`${LEGACY_V12_PROJECT_PREFIX}${item.id}`, null);
+      const raw = readJsonFromStorage(`${LEGACY_V13_PROJECT_PREFIX}${item.id}`, null);
       if (!raw) return;
       const state = normalizeState(raw);
       state.metadata.appVersion = APP_VERSION;
@@ -525,7 +536,7 @@ function migrateLegacyData() {
     });
   }
 
-  const legacyTemplates = readJsonFromStorage(LEGACY_V12_TEMPLATE_STORAGE_KEY, []);
+  const legacyTemplates = readJsonFromStorage(LEGACY_V13_TEMPLATE_STORAGE_KEY, []);
   if (Array.isArray(legacyTemplates) && legacyTemplates.length) {
     safeStorageSet(TEMPLATE_STORAGE_KEY, JSON.stringify(legacyTemplates));
   }
@@ -534,7 +545,7 @@ function migrateLegacyData() {
   safeStorageSet(MIGRATION_MARKER_KEY, 'true');
 
   if (migratedCount > 0) {
-    showToast(`v012のプロジェクト${migratedCount}件をv013へ移行しました。`);
+    showToast(`v013のプロジェクト${migratedCount}件をv014へ移行しました。`);
   }
 }
 
@@ -704,7 +715,7 @@ function renderChapterList() {
     copy.className = 'chapter-list-copy';
     const title = document.createElement('span');
     title.className = 'chapter-list-title';
-    title.textContent = chapter.type === 'preface' ? '冒頭部分' : (chapter.title || '無題の章');
+    title.textContent = chapter.type === 'preface' ? '冒頭部分' : (inlineMarkupToPlainText(chapter.title) || '無題の章');
     if (chapter.type === 'preface') {
       const badge = document.createElement('span');
       badge.className = 'chapter-preface-badge';
@@ -713,7 +724,7 @@ function renderChapterList() {
     }
     const meta = document.createElement('span');
     meta.className = 'chapter-list-meta';
-    const bodyLength = String(chapter.body || '').length;
+    const bodyLength = inlineMarkupToPlainText(chapter.body || '').length;
     const subheadingCount = extractChapterSubheadings(chapter.body).length;
     meta.textContent = `${bodyLength.toLocaleString('ja-JP')}文字${subheadingCount ? `・小見出し${subheadingCount}件` : ''}`;
     copy.append(title, meta);
@@ -724,7 +735,7 @@ function renderChapterList() {
     if (subheadings.length) {
       const summary = document.createElement('div');
       summary.className = 'chapter-subheadings';
-      summary.textContent = subheadings.map((item) => `${item.level === 2 ? '└' : '　└'} ${item.text}`).join('　');
+      summary.textContent = subheadings.map((item) => `${item.level === 2 ? '└' : '　└'} ${inlineMarkupToPlainText(item.text)}`).join('　');
       button.appendChild(summary);
     }
 
@@ -762,10 +773,10 @@ function renderSelectedChapterEditor(populateFields = true) {
   const isPreface = item.type === 'preface';
   els.selectedChapterLabel.textContent = isPreface
     ? '冒頭部分'
-    : (item.title || `第${chapterItemsBefore}章（無題）`);
+    : (inlineMarkupToPlainText(item.title) || `第${chapterItemsBefore}章（無題）`);
   els.selectedChapterMeta.textContent = isPreface
-    ? `${String(item.body || '').length.toLocaleString('ja-JP')}文字・章タイトルの前にある文章`
-    : `${chapterItemsBefore}/${chapterCount}章・${String(item.body || '').length.toLocaleString('ja-JP')}文字`;
+    ? `${inlineMarkupToPlainText(item.body || '').length.toLocaleString('ja-JP')}文字・章タイトルの前にある文章`
+    : `${chapterItemsBefore}/${chapterCount}章・${inlineMarkupToPlainText(item.body || '').length.toLocaleString('ja-JP')}文字`;
 
   if (populateFields) {
     isApplyingChapterEdit = true;
@@ -780,6 +791,150 @@ function renderSelectedChapterEditor(populateFields = true) {
   els.chapterMoveDownBtn.disabled = isPreface || selectedChapterIndex >= chapterModel.length - 1;
   els.duplicateChapterBtn.disabled = isPreface;
   els.deleteChapterBtn.textContent = isPreface ? '冒頭部分を削除' : '章を削除';
+}
+
+
+function handleInlineFormattingShortcut(event) {
+  if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
+  if (String(event.key || '').toLowerCase() !== 'b') return;
+  event.preventDefault();
+  applyInlineFormatting('bold', event.currentTarget?.id);
+}
+
+function applyInlineFormatting(action, targetId) {
+  const textarea = document.getElementById(targetId || '');
+  if (!(textarea instanceof HTMLTextAreaElement)) return;
+  const start = textarea.selectionStart;
+  const end = textarea.selectionEnd;
+  if (!Number.isInteger(start) || !Number.isInteger(end) || start === end) {
+    textarea.focus();
+    showToast('先に装飾したい文字を選択してください。');
+    return;
+  }
+
+  const value = textarea.value;
+  const selected = value.slice(start, end);
+  let result = null;
+
+  if (action === 'ruby') {
+    if (selected.includes('\n')) {
+      showToast('ルビは改行を含まない文字を選択してください。');
+      return;
+    }
+    const base = inlineMarkupToPlainText(selected).trim();
+    if (!base) {
+      showToast('ルビを付ける文字を選択してください。');
+      return;
+    }
+    const reading = window.prompt(`「${base}」の読みを入力してください。`, '');
+    if (reading === null) return;
+    const normalizedReading = String(reading).trim().replace(/[《》\n\r]/g, '');
+    if (!normalizedReading) {
+      showToast('読みを入力してください。');
+      return;
+    }
+    result = {
+      value: `${value.slice(0, start)}｜${base}《${normalizedReading}》${value.slice(end)}`,
+      selectionStart: start + 1,
+      selectionEnd: start + 1 + base.length,
+      message: 'ルビを設定しました。'
+    };
+  } else if (action === 'clear') {
+    result = clearInlineFormatting(value, start, end);
+  } else {
+    const markers = {
+      bold: ['**', '**'],
+      emphasis: ['《《', '》》'],
+      underline: ['__', '__']
+    }[action];
+    if (!markers) return;
+    result = toggleInlineWrapper(value, start, end, markers[0], markers[1]);
+  }
+
+  if (!result) return;
+  textarea.value = result.value;
+  textarea.focus();
+  textarea.setSelectionRange(result.selectionStart, result.selectionEnd);
+  textarea.dispatchEvent(new Event('input', { bubbles: true }));
+  showToast(result.message || '文字装飾を更新しました。');
+}
+
+function toggleInlineWrapper(value, start, end, open, close) {
+  const selected = value.slice(start, end);
+  const hasInsideWrapper = selected.startsWith(open)
+    && selected.endsWith(close)
+    && selected.length >= open.length + close.length;
+  if (hasInsideWrapper) {
+    const inner = selected.slice(open.length, selected.length - close.length);
+    return {
+      value: `${value.slice(0, start)}${inner}${value.slice(end)}`,
+      selectionStart: start,
+      selectionEnd: start + inner.length,
+      message: '選択範囲の装飾を解除しました。'
+    };
+  }
+
+  const wrappedOutside = value.slice(Math.max(0, start - open.length), start) === open
+    && value.slice(end, end + close.length) === close;
+  if (wrappedOutside) {
+    return {
+      value: `${value.slice(0, start - open.length)}${selected}${value.slice(end + close.length)}`,
+      selectionStart: start - open.length,
+      selectionEnd: end - open.length,
+      message: '選択範囲の装飾を解除しました。'
+    };
+  }
+
+  return {
+    value: `${value.slice(0, start)}${open}${selected}${close}${value.slice(end)}`,
+    selectionStart: start + open.length,
+    selectionEnd: end + open.length,
+    message: '選択範囲へ装飾を設定しました。'
+  };
+}
+
+function clearInlineFormatting(value, start, end) {
+  const selected = value.slice(start, end);
+  const wrappers = [['**', '**'], ['__', '__'], ['《《', '》》']];
+  for (const [open, close] of wrappers) {
+    if (value.slice(Math.max(0, start - open.length), start) === open
+      && value.slice(end, end + close.length) === close) {
+      return {
+        value: `${value.slice(0, start - open.length)}${selected}${value.slice(end + close.length)}`,
+        selectionStart: start - open.length,
+        selectionEnd: end - open.length,
+        message: '選択範囲の装飾を解除しました。'
+      };
+    }
+  }
+
+  if (value.slice(start - 1, start) === '｜') {
+    const rubyTail = value.slice(end).match(/^《[^《》\n]+》/u);
+    if (rubyTail) {
+      return {
+        value: `${value.slice(0, start - 1)}${selected}${value.slice(end + rubyTail[0].length)}`,
+        selectionStart: start - 1,
+        selectionEnd: end - 1,
+        message: 'ルビを解除しました。'
+      };
+    }
+  }
+
+  const plain = inlineMarkupToPlainText(selected);
+  if (plain === selected) {
+    return {
+      value,
+      selectionStart: start,
+      selectionEnd: end,
+      message: '選択範囲内に解除できる装飾がありません。'
+    };
+  }
+  return {
+    value: `${value.slice(0, start)}${plain}${value.slice(end)}`,
+    selectionStart: start,
+    selectionEnd: start + plain.length,
+    message: '選択範囲の装飾を解除しました。'
+  };
 }
 
 function handleChapterListClick(event) {
@@ -2074,7 +2229,7 @@ function balanceParagraphSplit(text, splitIndex, options = {}) {
   }
   const balancedHeadLines = measureParagraphLineCount(text.slice(0, best), headOptions);
   if (balancedHeadLines < minimumLines) return { index: splitIndex, moveWhole: true };
-  return { index: best, moveWhole: false };
+  return { index: adjustInlineMarkupBreak(text, best), moveWhole: false };
 }
 
 function findFittingLength(content, text, continuation, override, blankLinesBefore, settings) {
@@ -2110,7 +2265,7 @@ const JAPANESE_LINE_START_PROHIBITED = new Set(Array.from('、。，．？！‼
 const JAPANESE_LINE_END_PROHIBITED = new Set(Array.from('([（［｛〔〈《「『【〘〖〝‘“«'));
 
 function preferNaturalBreak(text, index, settings = DEFAULT_SETTINGS) {
-  if (index <= 1 || index >= text.length) return index;
+  if (index <= 1 || index >= text.length) return adjustInlineMarkupBreak(text, index);
   const windowStart = Math.max(1, index - 24);
   const candidate = text.slice(windowStart, index);
   const punctuation = ['。', '、', '！', '？', '」', '』', '）', '】', '》', '〉', '\n'];
@@ -2123,8 +2278,11 @@ function preferNaturalBreak(text, index, settings = DEFAULT_SETTINGS) {
     }
   }
 
-  if (settings.lineBreakMode !== 'strict') return preferred;
-  return findSafeJapaneseBreak(text, preferred, 48) || findSafeJapaneseBreak(text, index, 48) || preferred;
+  if (settings.lineBreakMode !== 'strict') return adjustInlineMarkupBreak(text, preferred);
+  const safe = findSafeJapaneseBreak(text, preferred, 48)
+    || findSafeJapaneseBreak(text, index, 48)
+    || preferred;
+  return adjustInlineMarkupBreak(text, safe);
 }
 
 function isSafeJapaneseBreak(text, index) {
@@ -2560,27 +2718,143 @@ function resolveTypesetAlign(value, settings = DEFAULT_SETTINGS) {
 
 function setTypesetText(element, text, settings = DEFAULT_SETTINGS) {
   element.replaceChildren();
-  const value = String(text ?? '');
+  renderInlineMarkup(element, String(text ?? ''), settings, 0);
+}
+
+function renderInlineMarkup(parent, value, settings = DEFAULT_SETTINGS, depth = 0) {
+  if (!value) return;
+  if (depth > 8) {
+    appendPlainTypesetText(parent, value, settings);
+    return;
+  }
+
+  let cursor = 0;
+  while (cursor < value.length) {
+    if (value.startsWith('｜', cursor)) {
+      const baseEnd = value.indexOf('《', cursor + 1);
+      const readingEnd = baseEnd >= 0 ? value.indexOf('》', baseEnd + 1) : -1;
+      const base = baseEnd >= 0 ? value.slice(cursor + 1, baseEnd) : '';
+      const reading = readingEnd >= 0 ? value.slice(baseEnd + 1, readingEnd) : '';
+      if (baseEnd > cursor + 1 && readingEnd > baseEnd + 1 && !/[\n\r｜《》]/u.test(base + reading)) {
+        const ruby = document.createElement('ruby');
+        ruby.className = 'inline-ruby';
+        const rb = document.createElement('rb');
+        appendPlainTypesetText(rb, base, settings);
+        const rt = document.createElement('rt');
+        rt.textContent = reading;
+        ruby.append(rb, rt);
+        parent.appendChild(ruby);
+        cursor = readingEnd + 1;
+        continue;
+      }
+    }
+
+    const matched = [
+      { open: '《《', close: '》》', tag: 'span', className: 'inline-emphasis' },
+      { open: '**', close: '**', tag: 'strong', className: 'inline-bold' },
+      { open: '__', close: '__', tag: 'span', className: 'inline-underline' }
+    ].find((item) => value.startsWith(item.open, cursor));
+
+    if (matched) {
+      const closeIndex = value.indexOf(matched.close, cursor + matched.open.length);
+      if (closeIndex > cursor + matched.open.length) {
+        const node = document.createElement(matched.tag);
+        node.className = matched.className;
+        renderInlineMarkup(
+          node,
+          value.slice(cursor + matched.open.length, closeIndex),
+          settings,
+          depth + 1
+        );
+        parent.appendChild(node);
+        cursor = closeIndex + matched.close.length;
+        continue;
+      }
+    }
+
+    const nextIndexes = ['｜', '《《', '**', '__']
+      .map((marker) => value.indexOf(marker, cursor + 1))
+      .filter((index) => index >= 0);
+    const next = nextIndexes.length ? Math.min(...nextIndexes) : value.length;
+    appendPlainTypesetText(parent, value.slice(cursor, next), settings);
+    cursor = next;
+  }
+}
+
+function appendPlainTypesetText(parent, value, settings = DEFAULT_SETTINGS) {
+  if (!value) return;
   if (!isVerticalWriting(settings) || !settings.autoTateChuYoko) {
-    element.textContent = value;
+    parent.appendChild(document.createTextNode(value));
     return;
   }
   const pattern = /[0-9]+/g;
   let cursor = 0;
   let match;
   while ((match = pattern.exec(value))) {
-    if (match.index > cursor) element.appendChild(document.createTextNode(value.slice(cursor, match.index)));
+    if (match.index > cursor) parent.appendChild(document.createTextNode(value.slice(cursor, match.index)));
     if (match[0].length <= 3) {
       const combined = document.createElement('span');
       combined.className = 'tate-chu-yoko';
       combined.textContent = match[0];
-      element.appendChild(combined);
+      parent.appendChild(combined);
     } else {
-      element.appendChild(document.createTextNode(match[0]));
+      parent.appendChild(document.createTextNode(match[0]));
     }
     cursor = match.index + match[0].length;
   }
-  if (cursor < value.length) element.appendChild(document.createTextNode(value.slice(cursor)));
+  if (cursor < value.length) parent.appendChild(document.createTextNode(value.slice(cursor)));
+}
+
+function inlineMarkupToPlainText(value) {
+  let result = String(value ?? '');
+  for (let pass = 0; pass < 6; pass += 1) {
+    const previous = result;
+    result = result
+      .replace(/｜([^｜《》\n]+)《([^《》\n]+)》/gu, '$1')
+      .replace(/《《([\s\S]*?)》》/gu, '$1')
+      .replace(/\*\*([\s\S]*?)\*\*/gu, '$1')
+      .replace(/__([\s\S]*?)__/gu, '$1');
+    if (result === previous) break;
+  }
+  return result;
+}
+
+function getInlineMarkupRanges(value) {
+  const text = String(value ?? '');
+  const ranges = [];
+  let cursor = 0;
+  while (cursor < text.length) {
+    if (text.startsWith('｜', cursor)) {
+      const baseEnd = text.indexOf('《', cursor + 1);
+      const readingEnd = baseEnd >= 0 ? text.indexOf('》', baseEnd + 1) : -1;
+      if (baseEnd > cursor + 1 && readingEnd > baseEnd + 1) {
+        ranges.push({ start: cursor, end: readingEnd + 1, type: 'ruby' });
+        cursor = readingEnd + 1;
+        continue;
+      }
+    }
+    const marker = [
+      ['《《', '》》', 'emphasis'],
+      ['**', '**', 'bold'],
+      ['__', '__', 'underline']
+    ].find(([open]) => text.startsWith(open, cursor));
+    if (marker) {
+      const closeIndex = text.indexOf(marker[1], cursor + marker[0].length);
+      if (closeIndex > cursor + marker[0].length) {
+        ranges.push({ start: cursor, end: closeIndex + marker[1].length, type: marker[2] });
+        cursor = closeIndex + marker[1].length;
+        continue;
+      }
+    }
+    cursor += 1;
+  }
+  return ranges;
+}
+
+function adjustInlineMarkupBreak(value, index) {
+  const safeIndex = Math.max(0, Math.min(Number(index) || 0, String(value ?? '').length));
+  const range = getInlineMarkupRanges(value).find((item) => item.start < safeIndex && safeIndex < item.end);
+  return range ? range.start : safeIndex;
 }
 
 function getPhysicalPageMargins(pageIndex, settings = DEFAULT_SETTINGS) {
@@ -3133,7 +3407,7 @@ function updateParagraphControls() {
   try {
     const blankInfo = record.blankLinesBefore > 0 ? `・前に空行${record.blankLinesBefore}行` : '';
     els.selectedParagraphLabel.textContent = `第${index + 1}段落${blankInfo}${hasMeaningfulOverride(override) ? '・個別設定あり' : ''}`;
-    els.selectedParagraphExcerpt.textContent = record.text;
+    els.selectedParagraphExcerpt.textContent = inlineMarkupToPlainText(record.text);
     els.paragraphFontSize.value = Number.isFinite(override.fontSize) ? String(override.fontSize) : '';
     els.paragraphLineHeight.value = Number.isFinite(override.lineHeight) ? String(override.lineHeight) : '';
     els.paragraphLetterSpacing.value = Number.isFinite(override.letterSpacing) ? String(override.letterSpacing) : '';
@@ -3761,7 +4035,7 @@ function refreshCurrentProjectStatus() {
 }
 
 function updateCharCount() {
-  const count = els.bodyInput.value.replace(/\s/g, '').length;
+  const count = inlineMarkupToPlainText(els.bodyInput.value).replace(/\s/g, '').length;
   els.charCount.textContent = `${count.toLocaleString('ja-JP')}文字`;
 }
 
