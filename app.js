@@ -1,20 +1,20 @@
 'use strict';
 
-const APP_VERSION = 'v003';
-const SCHEMA_VERSION = 3;
+const APP_VERSION = 'v004';
+const SCHEMA_VERSION = 4;
 const AUTOSAVE_DELAY = 700;
 
-const PROJECT_INDEX_KEY = 'typesetting-app-v003-project-index';
-const PROJECT_PREFIX = 'typesetting-app-v003-project:';
-const CURRENT_PROJECT_KEY = 'typesetting-app-v003-current-project';
-const TEMPLATE_STORAGE_KEY = 'typesetting-app-v003-templates';
+const PROJECT_INDEX_KEY = 'typesetting-app-v004-project-index';
+const PROJECT_PREFIX = 'typesetting-app-v004-project:';
+const CURRENT_PROJECT_KEY = 'typesetting-app-v004-current-project';
+const TEMPLATE_STORAGE_KEY = 'typesetting-app-v004-templates';
 
-const LEGACY_V2_PROJECT_INDEX_KEY = 'typesetting-app-v002-project-index';
-const LEGACY_V2_PROJECT_PREFIX = 'typesetting-app-v002-project:';
-const LEGACY_V2_CURRENT_PROJECT_KEY = 'typesetting-app-v002-current-project';
-const LEGACY_V2_TEMPLATE_STORAGE_KEY = 'typesetting-app-v002-templates';
+const LEGACY_V3_PROJECT_INDEX_KEY = 'typesetting-app-v003-project-index';
+const LEGACY_V3_PROJECT_PREFIX = 'typesetting-app-v003-project:';
+const LEGACY_V3_CURRENT_PROJECT_KEY = 'typesetting-app-v003-current-project';
+const LEGACY_V3_TEMPLATE_STORAGE_KEY = 'typesetting-app-v003-templates';
 const LEGACY_V1_STORAGE_KEY = 'typesetting-app-v001';
-const MIGRATION_MARKER_KEY = 'typesetting-app-v003-migration-complete';
+const MIGRATION_MARKER_KEY = 'typesetting-app-v004-migration-complete';
 
 const DEFAULT_SETTINGS = Object.freeze({
   paperPreset: 'A5',
@@ -30,6 +30,8 @@ const DEFAULT_SETTINGS = Object.freeze({
   letterSpacing: 0.02,
   textIndent: 1,
   textAlign: 'justify',
+  preserveBlankLines: true,
+  blankLineScale: 1,
   titleSize: 20,
   titleBottom: 14,
   titleAlign: 'center',
@@ -42,13 +44,16 @@ const DEFAULT_SETTINGS = Object.freeze({
 
 const SAMPLE_MANUSCRIPT = Object.freeze({
   title: 'サンプルタイトル',
-  subtitle: '段落個別調整の確認用原稿',
+  subtitle: '改行・空行保持の確認用原稿',
   author: '著者名',
-  body: `これは、組版アプリv003の動作確認用原稿です。
+  body: `これは、組版アプリv004の動作確認用原稿です。
 
 右側の設定を変更すると、用紙サイズ、余白、フォント、文字サイズ、文字間、行間が中央のプレビューへ自動反映されます。本文は空行ごとに段落として扱われ、ページ内に収まらない場合は自動的に次のページへ送られます。
 
-v003では、中央プレビューの本文段落をクリックし、その段落だけ文字サイズ、行間、文字間、揃え、前後余白などを調整できます。
+v004では、本文中の手動改行と空行の数を保ったまま組版します。次の文章までに空行を2行入れているため、プレビューでも同じ間隔が表示されます。
+
+
+中央プレビューの本文段落をクリックすると、その段落だけ文字サイズ、行間、文字間、揃え、前後余白などを調整できます。
 
 強制改ページや「次の段落と同じページに置く」設定にも対応しています。個別設定を解除すると、本文全体の組版設定へ戻ります。
 
@@ -56,7 +61,7 @@ JSON出力は、バックアップや別端末への移動に使用してくだ�
 });
 
 const DEFAULT_STATE = Object.freeze({
-  projectName: '組版アプリ v003 サンプル',
+  projectName: '組版アプリ v004 サンプル',
   manuscript: { ...SAMPLE_MANUSCRIPT, paragraphs: [] },
   paragraphOverrides: {},
   settings: DEFAULT_SETTINGS,
@@ -118,6 +123,7 @@ let isRendering = false;
 let isApplyingState = false;
 let isApplyingParagraphControls = false;
 let paragraphRecords = [];
+let trailingBlankLines = 0;
 let paragraphOverrides = {};
 let selectedParagraphId = null;
 
@@ -129,6 +135,7 @@ function init() {
   loadInitialProject();
   updateCharCount();
   applyViewSettings();
+  updateBlankLineControls();
   scheduleRender();
   refreshCurrentProjectStatus();
 }
@@ -140,7 +147,7 @@ function cacheElements() {
     'authorInput', 'bodyInput', 'charCount', 'pages', 'pageCount', 'saveStatus',
     'currentProjectStatus', 'paperPreset', 'pageWidth', 'pageHeight', 'marginTop',
     'marginBottom', 'marginLeft', 'marginRight', 'fontFamily', 'fontSize', 'lineHeight',
-    'letterSpacing', 'textIndent', 'textAlign', 'titleSize', 'titleBottom', 'titleAlign',
+    'letterSpacing', 'textIndent', 'textAlign', 'preserveBlankLines', 'blankLineScale', 'titleSize', 'titleBottom', 'titleAlign',
     'showPageNumbers', 'firstPageNumber', 'viewMode', 'zoomSelect', 'toggleGuidesBtn',
     'resetSettingsBtn', 'measureRoot', 'toast', 'previewViewport', 'projectsModal',
     'projectList', 'projectStorageSummary', 'createProjectFromModalBtn', 'templatesModal',
@@ -162,7 +169,8 @@ function bindEvents() {
     els.projectName, els.titleInput, els.subtitleInput, els.authorInput,
     els.pageWidth, els.pageHeight, els.marginTop, els.marginBottom, els.marginLeft,
     els.marginRight, els.fontFamily, els.fontSize, els.lineHeight, els.letterSpacing,
-    els.textIndent, els.textAlign, els.titleSize, els.titleBottom, els.titleAlign,
+    els.textIndent, els.textAlign, els.preserveBlankLines, els.blankLineScale,
+    els.titleSize, els.titleBottom, els.titleAlign,
     els.showPageNumbers, els.firstPageNumber
   ];
 
@@ -189,6 +197,7 @@ function bindEvents() {
   els.paperPreset.addEventListener('change', handlePresetChange);
   els.viewMode.addEventListener('change', handleViewSettingChange);
   els.zoomSelect.addEventListener('change', handleViewSettingChange);
+  els.preserveBlankLines.addEventListener('change', updateBlankLineControls);
 
   els.toggleGuidesBtn.addEventListener('click', () => {
     const pressed = els.toggleGuidesBtn.getAttribute('aria-pressed') === 'true';
@@ -287,7 +296,7 @@ function loadInitialProject() {
     applyState(migrated);
     saveCurrentProject(false);
     updateSaveStatus('v001データを移行済み');
-    showToast('v001の保存データをv003へ移行しました。');
+    showToast('v001の保存データをv004へ移行しました。');
     return;
   }
 
@@ -307,15 +316,15 @@ function migrateLegacyData() {
     return;
   }
 
-  const legacyIndex = readJsonFromStorage(LEGACY_V2_PROJECT_INDEX_KEY, []);
+  const legacyIndex = readJsonFromStorage(LEGACY_V3_PROJECT_INDEX_KEY, []);
   let migratedCount = 0;
   let mappedCurrentId = null;
-  const legacyCurrentId = safeStorageGet(LEGACY_V2_CURRENT_PROJECT_KEY);
+  const legacyCurrentId = safeStorageGet(LEGACY_V3_CURRENT_PROJECT_KEY);
 
   if (Array.isArray(legacyIndex)) {
     legacyIndex.forEach((item) => {
       if (!item?.id) return;
-      const raw = readJsonFromStorage(`${LEGACY_V2_PROJECT_PREFIX}${item.id}`, null);
+      const raw = readJsonFromStorage(`${LEGACY_V3_PROJECT_PREFIX}${item.id}`, null);
       if (!raw) return;
       const state = normalizeState(raw);
       state.metadata.appVersion = APP_VERSION;
@@ -329,7 +338,7 @@ function migrateLegacyData() {
     });
   }
 
-  const legacyTemplates = readJsonFromStorage(LEGACY_V2_TEMPLATE_STORAGE_KEY, []);
+  const legacyTemplates = readJsonFromStorage(LEGACY_V3_TEMPLATE_STORAGE_KEY, []);
   if (Array.isArray(legacyTemplates) && legacyTemplates.length) {
     safeStorageSet(TEMPLATE_STORAGE_KEY, JSON.stringify(legacyTemplates));
   }
@@ -338,8 +347,13 @@ function migrateLegacyData() {
   safeStorageSet(MIGRATION_MARKER_KEY, 'true');
 
   if (migratedCount > 0) {
-    showToast(`v002のプロジェクト${migratedCount}件をv003へ移行しました。`);
+    showToast(`v003のプロジェクト${migratedCount}件をv004へ移行しました。`);
   }
+}
+
+function updateBlankLineControls() {
+  if (!els.blankLineScale || !els.preserveBlankLines) return;
+  els.blankLineScale.disabled = !els.preserveBlankLines.checked;
 }
 
 function handlePresetChange() {
@@ -412,20 +426,30 @@ function paginate(state) {
 
   paragraphs.forEach((record, paragraphIndex) => {
     const override = normalizeParagraphOverride(state.paragraphOverrides?.[record.id]);
+    const blankLinesBefore = state.settings.preserveBlankLines
+      ? sanitizeBlankLineCount(record.blankLinesBefore)
+      : 0;
     const nextRecord = paragraphs[paragraphIndex + 1] || null;
     const nextOverride = nextRecord
       ? normalizeParagraphOverride(state.paragraphOverrides?.[nextRecord.id])
       : null;
+    const nextBlankLinesBefore = nextRecord && state.settings.preserveBlankLines
+      ? sanitizeBlankLineCount(nextRecord.blankLinesBefore)
+      : 0;
 
     if (override.pageBreakBefore && content.childElementCount > 0) startNewPage();
 
     if (override.keepWithNext && nextRecord && content.childElementCount > 0) {
       const currentProbe = createParagraphElement(record.text, {
         override,
+        blankLinesBefore,
+        settings: state.settings,
         isFinal: true
       });
       const nextProbe = createParagraphElement(nextRecord.text, {
         override: nextOverride,
+        blankLinesBefore: nextBlankLinesBefore,
+        settings: state.settings,
         isFinal: true
       });
       content.append(currentProbe, nextProbe);
@@ -439,9 +463,12 @@ function paginate(state) {
     let isContinuation = false;
 
     while (remaining.length > 0) {
+      const fragmentBlankLines = isContinuation ? 0 : blankLinesBefore;
       const fullParagraph = createParagraphElement(remaining, {
         continuation: isContinuation,
         override,
+        blankLinesBefore: fragmentBlankLines,
+        settings: state.settings,
         isFinal: true
       });
       content.appendChild(fullParagraph);
@@ -454,6 +481,7 @@ function paginate(state) {
           isFinal: true,
           paragraphId: record.id,
           paragraphIndex,
+          blankLinesBefore: fragmentBlankLines,
           override
         });
         remaining = '';
@@ -461,7 +489,14 @@ function paginate(state) {
       }
 
       fullParagraph.remove();
-      const splitIndex = findFittingLength(content, remaining, isContinuation, override);
+      const splitIndex = findFittingLength(
+        content,
+        remaining,
+        isContinuation,
+        override,
+        fragmentBlankLines,
+        state.settings
+      );
 
       if (content.childElementCount > 0 && splitIndex >= remaining.length) {
         startNewPage();
@@ -476,6 +511,8 @@ function paginate(state) {
         content.appendChild(createParagraphElement(head, {
           continuation: isContinuation,
           override,
+          blankLinesBefore: fragmentBlankLines,
+          settings: state.settings,
           isFinal: false
         }));
         pages[pageIndex].push({
@@ -485,6 +522,7 @@ function paginate(state) {
           isFinal,
           paragraphId: record.id,
           paragraphIndex,
+          blankLinesBefore: fragmentBlankLines,
           override
         });
         remaining = tail;
@@ -499,6 +537,8 @@ function paginate(state) {
         content.appendChild(createParagraphElement(head, {
           continuation: isContinuation,
           override,
+          blankLinesBefore: fragmentBlankLines,
+          settings: state.settings,
           isFinal: false
         }));
         pages[pageIndex].push({
@@ -508,6 +548,7 @@ function paginate(state) {
           isFinal: false,
           paragraphId: record.id,
           paragraphIndex,
+          blankLinesBefore: fragmentBlankLines,
           override
         });
         remaining = tail;
@@ -517,6 +558,20 @@ function paginate(state) {
       startNewPage();
     }
   });
+
+  const finalBlankLines = state.settings.preserveBlankLines
+    ? sanitizeBlankLineCount(state.manuscript.trailingBlankLines)
+    : 0;
+  if (finalBlankLines > 0) {
+    const spacer = createBlankSpaceElement(finalBlankLines, state.settings);
+    content.appendChild(spacer);
+    if (!fits(content) && content.childElementCount > 1) {
+      spacer.remove();
+      startNewPage();
+      content.appendChild(spacer);
+    }
+    pages[pageIndex].push({ type: 'blank-space', lines: finalBlankLines });
+  }
 
   if (pages.length > 1 && pages[pages.length - 1].length === 0) pages.pop();
   root.remove();
@@ -544,7 +599,7 @@ function fits(content) {
   return content.scrollHeight <= content.clientHeight + 0.5;
 }
 
-function findFittingLength(content, text, continuation, override) {
+function findFittingLength(content, text, continuation, override, blankLinesBefore, settings) {
   let low = 0;
   let high = text.length;
   let best = 0;
@@ -554,6 +609,8 @@ function findFittingLength(content, text, continuation, override) {
     const probe = createParagraphElement(text.slice(0, mid), {
       continuation,
       override,
+      blankLinesBefore,
+      settings,
       isFinal: false
     });
     content.appendChild(probe);
@@ -613,6 +670,8 @@ function createParagraphElement(text, options = {}) {
   const {
     continuation = false,
     override = {},
+    blankLinesBefore = 0,
+    settings = DEFAULT_SETTINGS,
     isFinal = true,
     paragraphId = null,
     paragraphIndex = null,
@@ -623,11 +682,19 @@ function createParagraphElement(text, options = {}) {
   paragraph.className = 'body-paragraph';
   paragraph.textContent = text;
   if (continuation) paragraph.style.textIndent = '0';
-  applyParagraphOverrideStyles(paragraph, override, continuation, isFinal);
+  applyParagraphOverrideStyles(
+    paragraph,
+    override,
+    continuation,
+    isFinal,
+    blankLinesBefore,
+    settings
+  );
 
   if (paragraphId) {
     paragraph.dataset.paragraphId = paragraphId;
     paragraph.dataset.paragraphIndex = String(paragraphIndex ?? 0);
+    paragraph.dataset.blankLinesBefore = String(sanitizeBlankLineCount(blankLinesBefore));
     if (selectable) paragraph.tabIndex = 0;
     if (hasMeaningfulOverride(override)) paragraph.classList.add('has-override');
   }
@@ -635,29 +702,114 @@ function createParagraphElement(text, options = {}) {
   return paragraph;
 }
 
-function applyParagraphOverrideStyles(paragraph, override, continuation, isFinal) {
+function applyParagraphOverrideStyles(
+  paragraph,
+  override,
+  continuation,
+  isFinal,
+  blankLinesBefore,
+  settings
+) {
   const normalized = normalizeParagraphOverride(override);
+  const effectiveSettings = { ...DEFAULT_SETTINGS, ...(settings || {}) };
   if (Number.isFinite(normalized.fontSize)) paragraph.style.fontSize = `${normalized.fontSize}pt`;
   if (Number.isFinite(normalized.lineHeight)) paragraph.style.lineHeight = `${normalized.lineHeight}pt`;
   if (Number.isFinite(normalized.letterSpacing)) paragraph.style.letterSpacing = `${normalized.letterSpacing}em`;
   if (normalized.textAlign && normalized.textAlign !== 'inherit') paragraph.style.textAlign = normalized.textAlign;
-  if (!continuation && Number.isFinite(normalized.spaceBefore)) paragraph.style.marginTop = `${normalized.spaceBefore}mm`;
-  if (isFinal && Number.isFinite(normalized.spaceAfter)) paragraph.style.marginBottom = `${normalized.spaceAfter}mm`;
+
+  if (!continuation) {
+    const beforeParts = [];
+    const blankCount = effectiveSettings.preserveBlankLines
+      ? sanitizeBlankLineCount(blankLinesBefore)
+      : 0;
+    const effectiveLineHeight = Number.isFinite(normalized.lineHeight)
+      ? normalized.lineHeight
+      : sanitizeNumber(effectiveSettings.lineHeight, 15);
+    const scale = Math.max(0, sanitizeNumber(effectiveSettings.blankLineScale, 1));
+    const blankSpace = blankCount * effectiveLineHeight * scale;
+    if (blankSpace > 0) beforeParts.push(`${blankSpace}pt`);
+    if (Number.isFinite(normalized.spaceBefore) && normalized.spaceBefore > 0) {
+      beforeParts.push(`${normalized.spaceBefore}mm`);
+    }
+    if (beforeParts.length === 1) paragraph.style.paddingTop = beforeParts[0];
+    if (beforeParts.length > 1) paragraph.style.paddingTop = `calc(${beforeParts.join(' + ')})`;
+  }
+
+  if (isFinal && Number.isFinite(normalized.spaceAfter) && normalized.spaceAfter > 0) {
+    paragraph.style.paddingBottom = `${normalized.spaceAfter}mm`;
+  }
+}
+
+function createBlankSpaceElement(lines, settings = DEFAULT_SETTINGS) {
+  const spacer = document.createElement('div');
+  spacer.className = 'blank-space';
+  const effectiveSettings = { ...DEFAULT_SETTINGS, ...(settings || {}) };
+  const count = sanitizeBlankLineCount(lines);
+  const lineHeight = sanitizeNumber(effectiveSettings.lineHeight, 15);
+  const scale = Math.max(0, sanitizeNumber(effectiveSettings.blankLineScale, 1));
+  spacer.style.height = `${count * lineHeight * scale}pt`;
+  spacer.setAttribute('aria-hidden', 'true');
+  return spacer;
+}
+
+function normalizeBodyText(text) {
+  return String(text || '')
+    .replace(/\r\n?/g, '\n')
+    .replace(/\u00A0/g, ' ')
+    .replace(/\u200B/g, '');
+}
+
+function parseBodyStructure(text) {
+  const normalized = normalizeBodyText(text);
+  if (!normalized) return { paragraphs: [], trailingBlankLines: 0 };
+
+  const lines = normalized.split('\n');
+  const paragraphs = [];
+  let currentLines = [];
+  let pendingBlankLines = 0;
+  let currentBlankLinesBefore = 0;
+
+  const flushParagraph = () => {
+    if (!currentLines.length) return;
+    paragraphs.push({
+      text: currentLines.join('\n'),
+      blankLinesBefore: sanitizeBlankLineCount(currentBlankLinesBefore)
+    });
+    currentLines = [];
+    currentBlankLinesBefore = 0;
+  };
+
+  lines.forEach((line) => {
+    const isBlank = /^[\t \u3000]*$/.test(line);
+    if (isBlank) {
+      if (currentLines.length) flushParagraph();
+      pendingBlankLines += 1;
+      return;
+    }
+
+    if (!currentLines.length) {
+      currentBlankLinesBefore = pendingBlankLines;
+      pendingBlankLines = 0;
+    }
+    currentLines.push(line);
+  });
+
+  flushParagraph();
+  return {
+    paragraphs,
+    trailingBlankLines: sanitizeBlankLineCount(pendingBlankLines)
+  };
 }
 
 function normalizeParagraphs(text) {
-  return String(text || '')
-    .replace(/\r\n?/g, '\n')
-    .replace(/[\u00A0\u200B]/g, '')
-    .split(/\n[\t \u3000]*\n+/)
-    .map((paragraph) => paragraph.trim())
-    .filter(Boolean);
+  return parseBodyStructure(text).paragraphs.map((paragraph) => paragraph.text);
 }
 
 function createParagraphRecords(text) {
-  return normalizeParagraphs(text).map((paragraphText) => ({
+  return parseBodyStructure(text).paragraphs.map((paragraph) => ({
     id: createId('paragraph'),
-    text: paragraphText
+    text: paragraph.text,
+    blankLinesBefore: paragraph.blankLinesBefore
   }));
 }
 
@@ -679,11 +831,15 @@ function buildPreview(pageFragments, settings) {
         content.appendChild(createParagraphElement(fragment.text, {
           continuation: fragment.continuation,
           override: fragment.override,
+          blankLinesBefore: fragment.blankLinesBefore,
+          settings,
           isFinal: fragment.isFinal,
           paragraphId: fragment.paragraphId,
           paragraphIndex: fragment.paragraphIndex,
           selectable: true
         }));
+      } else if (fragment.type === 'blank-space') {
+        content.appendChild(createBlankSpaceElement(fragment.lines, settings));
       }
     });
 
@@ -753,7 +909,8 @@ function collectState() {
       subtitle: els.subtitleInput.value,
       author: els.authorInput.value,
       body: els.bodyInput.value,
-      paragraphs: deepClone(paragraphRecords)
+      paragraphs: deepClone(paragraphRecords),
+      trailingBlankLines
     },
     paragraphOverrides: deepClone(paragraphOverrides),
     settings: collectSettings(),
@@ -782,6 +939,8 @@ function collectSettings() {
     letterSpacing: sanitizeNumber(els.letterSpacing.value, 0.02),
     textIndent: sanitizeNumber(els.textIndent.value, 1),
     textAlign: els.textAlign.value,
+    preserveBlankLines: els.preserveBlankLines.checked,
+    blankLineScale: sanitizeNumber(els.blankLineScale.value, 1),
     titleSize: sanitizeNumber(els.titleSize.value, 20),
     titleBottom: sanitizeNumber(els.titleBottom.value, 14),
     titleAlign: els.titleAlign.value,
@@ -804,6 +963,7 @@ function applyState(state) {
     els.authorInput.value = normalized.manuscript.author;
     els.bodyInput.value = normalized.manuscript.body;
     paragraphRecords = deepClone(normalized.manuscript.paragraphs);
+    trailingBlankLines = sanitizeBlankLineCount(normalized.manuscript.trailingBlankLines);
     paragraphOverrides = deepClone(normalized.paragraphOverrides);
     selectedParagraphId = null;
     applySettingsToInputs(normalized.settings);
@@ -831,6 +991,9 @@ function applySettingsToInputs(settings) {
   els.letterSpacing.value = normalized.letterSpacing;
   els.textIndent.value = normalized.textIndent;
   els.textAlign.value = normalized.textAlign;
+  els.preserveBlankLines.checked = Boolean(normalized.preserveBlankLines);
+  els.blankLineScale.value = normalized.blankLineScale;
+  updateBlankLineControls();
   els.titleSize.value = normalized.titleSize;
   els.titleBottom.value = normalized.titleBottom;
   els.titleAlign.value = normalized.titleAlign;
@@ -857,9 +1020,15 @@ function normalizeState(raw) {
   const oldRecords = Array.isArray(manuscriptSource.paragraphs)
     ? manuscriptSource.paragraphs
         .filter((record) => record && typeof record.id === 'string')
-        .map((record) => ({ id: record.id, text: String(record.text || '') }))
+        .map((record) => ({
+          id: record.id,
+          text: String(record.text || ''),
+          blankLinesBefore: sanitizeBlankLineCount(record.blankLinesBefore)
+        }))
     : [];
-  manuscript.paragraphs = reconcileParagraphRecords(oldRecords, manuscript.body, false);
+  const parsedBody = parseBodyStructure(manuscript.body);
+  manuscript.paragraphs = reconcileParagraphRecords(oldRecords, manuscript.body);
+  manuscript.trailingBlankLines = parsedBody.trailingBlankLines;
   const validIds = new Set(manuscript.paragraphs.map((record) => record.id));
 
   return {
@@ -877,15 +1046,18 @@ function normalizeState(raw) {
 }
 
 function reconcileParagraphRecords(oldRecords, body) {
-  const texts = normalizeParagraphs(body);
+  const parsed = parseBodyStructure(body);
+  const incoming = parsed.paragraphs;
+  const texts = incoming.map((record) => record.text);
   const old = Array.isArray(oldRecords)
     ? oldRecords.filter((record) => record && typeof record.id === 'string')
     : [];
 
   if (texts.length === old.length) {
-    return texts.map((text, index) => ({
+    return incoming.map((record, index) => ({
       id: old[index]?.id || createId('paragraph'),
-      text
+      text: record.text,
+      blankLinesBefore: record.blankLinesBefore
     }));
   }
 
@@ -947,12 +1119,18 @@ function reconcileParagraphRecords(oldRecords, body) {
     let id = record?.id || createId('paragraph');
     if (usedIds.has(id)) id = createId('paragraph');
     usedIds.add(id);
-    return { id, text: texts[index] };
+    return {
+      id,
+      text: texts[index],
+      blankLinesBefore: incoming[index].blankLinesBefore
+    };
   });
 }
 
 function syncParagraphRecordsFromBody() {
+  const parsedBody = parseBodyStructure(els.bodyInput.value);
   paragraphRecords = reconcileParagraphRecords(paragraphRecords, els.bodyInput.value);
+  trailingBlankLines = parsedBody.trailingBlankLines;
   const validIds = new Set(paragraphRecords.map((record) => record.id));
   paragraphOverrides = normalizeParagraphOverrides(paragraphOverrides, validIds);
   if (selectedParagraphId && !validIds.has(selectedParagraphId)) selectedParagraphId = null;
@@ -1029,7 +1207,8 @@ function updateParagraphControls() {
   const override = normalizeParagraphOverride(paragraphOverrides[record.id]);
   isApplyingParagraphControls = true;
   try {
-    els.selectedParagraphLabel.textContent = `第${index + 1}段落${hasMeaningfulOverride(override) ? '・個別設定あり' : ''}`;
+    const blankInfo = record.blankLinesBefore > 0 ? `・前に空行${record.blankLinesBefore}行` : '';
+    els.selectedParagraphLabel.textContent = `第${index + 1}段落${blankInfo}${hasMeaningfulOverride(override) ? '・個別設定あり' : ''}`;
     els.selectedParagraphExcerpt.textContent = record.text;
     els.paragraphFontSize.value = Number.isFinite(override.fontSize) ? String(override.fontSize) : '';
     els.paragraphLineHeight.value = Number.isFinite(override.lineHeight) ? String(override.lineHeight) : '';
@@ -1579,6 +1758,12 @@ function safeStorageSet(key, value) {
     console.error(error);
     return false;
   }
+}
+
+function sanitizeBlankLineCount(value) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return 0;
+  return Math.max(0, Math.floor(parsed));
 }
 
 function sanitizeNumber(value, fallback) {

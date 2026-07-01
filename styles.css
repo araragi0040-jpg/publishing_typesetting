@@ -975,3 +975,18 @@ body.modal-open {
     border-radius: 0;
   }
 }
+
+/* v004: manual line break and blank-line preservation */
+.body-input-note {
+  margin: -4px 0 0;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.55;
+}
+
+.blank-space {
+  width: 100%;
+  min-height: 0;
+  flex: 0 0 auto;
+  pointer-events: none;
+}
