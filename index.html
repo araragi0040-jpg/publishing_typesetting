@@ -4,8 +4,8 @@
 <head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1" name="viewport"/>
-<meta content="出版社向け簡易組版アプリ v012" name="description"/>
-<title>組版アプリ v012</title>
+<meta content="出版社向け簡易組版アプリ v013" name="description"/>
+<title>組版アプリ v013</title>
 <link href="styles.css" rel="stylesheet"/>
 <link rel="icon" href="data:,">
 </head>
@@ -14,7 +14,7 @@
 <header class="topbar">
 <div class="brand-block">
 <strong>組版アプリ</strong>
-<span class="version-badge">v012</span>
+<span class="version-badge">v013</span>
 </div>
 <label class="project-name-wrap">
 <span>プロジェクト名</span>
@@ -55,7 +55,7 @@
       </label>
       <label class="field compact-gap">
         <span>サブタイトル</span>
-        <input id="subtitleInput" placeholder="不要な場合は空欄" type="text" value="原稿チェックと日本語組版の確認用原稿"/>
+        <input id="subtitleInput" placeholder="不要な場合は空欄" type="text" value="縦書き・右綴じ対応の確認用原稿"/>
       </label>
       <label class="field compact-gap no-margin">
         <span>著者名</span>
@@ -93,9 +93,9 @@
       </div>
       <label class="field body-field full-body-field">
         <span>本文全体</span>
-        <textarea id="bodyInput" placeholder="ここに本文を貼り付けてください。" spellcheck="false"># 第1章　組版アプリv012
+        <textarea id="bodyInput" placeholder="ここに本文を貼り付けてください。" spellcheck="false"># 第1章　組版アプリv013
 
-これは、組版アプリv012の動作確認用原稿です。右上の「原稿チェック」から、不要な空白や表記揺れを確認できます。
+これは、組版アプリv013の動作確認用原稿です。用紙設定から「縦書き・右綴じ」へ切り替えると、同じ原稿を縦書きで確認できます。
 
 右側の設定を変更すると、用紙サイズ、余白、フォント、文字サイズ、文字間、行間が中央のプレビューへ自動反映されます。
 
@@ -117,7 +117,7 @@
 
 行頭・行末の禁則処理、句読点のぶら下がり、ページをまたぐ段落の一行残りを抑える設定を追加しています。通常は「おすすめ設定」のままで使用できます。
 
-右上の「PDF保存」を押すと、目次を含む現在のページプレビューをそのままPDFとして直接保存できます。PCの印刷設定は使用しません。</textarea>
+右上の「PDF保存」を押すと、横書き・縦書きとも現在のページプレビューをそのままPDFとして直接保存できます。PCの印刷設定は使用しません。</textarea>
       </label>
       <div class="input-help-card">
         <strong>見出しの書き方</strong>
@@ -296,10 +296,17 @@
 <button class="button paragraph-reset" id="resetParagraphBtn" type="button">個別設定を解除</button>
 </div>
 </div></details>
-<details class="settings-accordion"><summary><span class="settings-summary-title">用紙</span><span class="settings-summary-hint">開閉</span></summary><div class="settings-accordion-body">
+<details class="settings-accordion layout-settings-accordion" open><summary><span class="settings-summary-title">用紙・文字方向</span><span class="settings-summary-hint">最初に設定</span></summary><div class="settings-accordion-body">
 
-<label class="field">
-<span>プリセット</span>
+<div class="feature-intro-card layout-intro-card"><strong>まず、書籍の読み方向を選びます</strong><p>一般的な資料は横書き、小説・文芸書などは縦書きを選択してください。</p></div>
+<label class="field"><span>文字方向・綴じ方向</span><select id="documentLayout"><option selected value="horizontal-ltr">横書き・左綴じ</option><option value="vertical-rtl">縦書き・右綴じ</option></select></label>
+<p class="layout-status" id="layoutStatus">横書き・左綴じ：一般的な冊子・資料向けです。</p>
+<div class="vertical-options" id="verticalOptions" hidden>
+<label class="field"><span>英数字の向き</span><select id="verticalTextOrientation"><option selected value="mixed">自然な向き（英字は横倒し）</option><option value="upright">すべて正立</option></select></label>
+<label class="check-row primary-check"><input checked id="autoTateChuYoko" type="checkbox"/><span>1〜3桁の半角数字を縦中横にする</span></label>
+<p class="helper-text">「12」「202」などの短い数字を、縦書きの1文字分に横並びで収めます。</p>
+</div>
+<label class="field"><span>用紙プリセット</span>
 <select id="paperPreset">
 <option value="A4">A4（210 × 297 mm）</option>
 <option selected="" value="A5">A5（148 × 210 mm）</option>
@@ -330,14 +337,15 @@
 <input id="marginBottom" max="100" min="0" step="0.5" type="number" value="18"/>
 </label>
 <label class="field compact">
-<span>左（mm）</span>
+<span>内側・綴じ側（mm）</span>
 <input id="marginLeft" max="100" min="0" step="0.5" type="number" value="18"/>
 </label>
 <label class="field compact">
-<span>右（mm）</span>
+<span>外側（mm）</span>
 <input id="marginRight" max="100" min="0" step="0.5" type="number" value="15"/>
 </label>
 </div>
+<p class="helper-text margin-direction-note">左右の余白は、選択した綴じ方向に合わせて奇数・偶数ページで自動的に入れ替わります。</p>
 </div></details>
 <details class="settings-accordion" open=""><summary><span class="settings-summary-title">本文</span><span class="settings-summary-hint">開閉</span></summary><div class="settings-accordion-body">
 
@@ -626,7 +634,7 @@
 </label>
 <button class="button modal-primary" id="saveTemplateBtn" type="button">現在の設定を保存</button>
 </div>
-<p class="helper-text template-note">テンプレートには用紙、余白、本文、日本語組版、見出し、タイトル、目次、ページ設定だけを保存します。原稿内容は含まれません。</p>
+<p class="helper-text template-note">テンプレートには文字方向、用紙、余白、本文、日本語組版、見出し、タイトル、目次、ページ設定だけを保存します。原稿内容は含まれません。</p>
 <div class="library-list" id="templateList"></div>
 </section>
 </div>

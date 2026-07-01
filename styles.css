@@ -381,7 +381,8 @@ h2 {
 }
 
 .document-heading {
-  margin: 0 0 var(--title-bottom);
+  margin: 0;
+  margin-block-end: var(--title-bottom);
   text-align: var(--title-align);
   break-inside: avoid;
 }
@@ -2311,3 +2312,37 @@ body.pdf-exporting {
 .check-modal-card > .check-modal-footer {
   margin-bottom: 14px;
 }
+
+
+/* v013: vertical writing and binding-aware preview */
+.layout-settings-accordion { border-color:#9dbdae; box-shadow:0 4px 16px rgba(47,94,74,.08); }
+.layout-intro-card { margin-bottom:12px; }
+.layout-status { margin:-2px 0 12px; padding:8px 10px; color:#315b4c; background:#eef7f2; border:1px solid #d2e5da; border-radius:8px; font-size:10px; line-height:1.55; }
+.vertical-options { margin:0 0 12px; padding:11px; background:#faf8f1; border:1px solid #e7dec3; border-radius:9px; }
+.vertical-options[hidden] { display:none !important; }
+.margin-direction-note { margin-top:10px; }
+.page-content { writing-mode:var(--writing-mode,horizontal-tb); text-orientation:var(--text-orientation,mixed); font-feature-settings:"palt" 1; }
+.pages.spread.binding-left { direction:rtl; }
+.pages.spread.binding-right { direction:ltr; }
+.pages .paper { direction:ltr; }
+.document-heading { margin:0; margin-block-end:var(--title-bottom); }
+.body-heading.heading-level-1 { border-bottom:0; border-block-end:.35mm solid currentColor; }
+.body-heading.heading-level-2 { border-left:0; padding-left:0; border-inline-start:1.2mm solid currentColor; padding-inline-start:3mm; }
+.page-content.writing-vertical { overflow-wrap:normal; word-break:normal; font-feature-settings:"vert" 1,"vrt2" 1,"palt" 1; }
+.page-content.writing-vertical .document-heading { margin-block-end:var(--title-bottom); min-height:100%; }
+.page-content.writing-vertical .doc-title,.page-content.writing-vertical .doc-subtitle,.page-content.writing-vertical .doc-author { margin-block:0; }
+.page-content.writing-vertical .doc-subtitle { margin-block-start:4mm; margin-inline-start:0; }
+.page-content.writing-vertical .doc-author { margin-block-start:6mm; margin-inline-start:0; }
+.page-content.writing-vertical .body-paragraph { white-space:pre-wrap; }
+.page-content.writing-vertical .blank-space { min-width:0; min-height:100%; }
+.page-content.writing-vertical .toc-title { margin:0; margin-block-end:10mm; text-align:start; }
+.page-content.writing-vertical .toc-continuation-title { margin:0; margin-block-end:5mm; }
+.page-content.writing-vertical .toc-entry { display:block; min-height:0 !important; margin-block-end:3.2mm; line-height:inherit; white-space:nowrap; }
+.page-content.writing-vertical .toc-entry-title,.page-content.writing-vertical .toc-entry-page { display:inline; }
+.page-content.writing-vertical .toc-entry-leader { display:inline-block; width:auto; min-width:0; height:7mm; margin-inline:1.5mm; border-bottom:0; border-inline-end:1px dotted currentColor; vertical-align:middle; }
+.page-content.writing-vertical .toc-entry-page { margin-inline-start:1mm; text-combine-upright:all; }
+.page-content.writing-vertical .toc-level-2 { padding-left:0; padding-block-start:1.5em; }
+.page-content.writing-vertical .toc-level-3 { padding-left:0; padding-block-start:3em; }
+.page-content.writing-vertical .toc-empty-message { margin:0; margin-block-start:4mm; }
+.tate-chu-yoko { display:inline-block; text-combine-upright:all; text-orientation:mixed; letter-spacing:0; line-height:1; }
+.pdf-export-stage .paper.writing-vertical,.pdf-export-stage .page-content.writing-vertical { text-rendering:optimizeLegibility; }

@@ -1,20 +1,20 @@
 'use strict';
 
-const APP_VERSION = 'v012';
-const SCHEMA_VERSION = 12;
+const APP_VERSION = 'v013';
+const SCHEMA_VERSION = 13;
 const AUTOSAVE_DELAY = 700;
 
-const PROJECT_INDEX_KEY = 'typesetting-app-v012-project-index';
-const PROJECT_PREFIX = 'typesetting-app-v012-project:';
-const CURRENT_PROJECT_KEY = 'typesetting-app-v012-current-project';
-const TEMPLATE_STORAGE_KEY = 'typesetting-app-v012-templates';
+const PROJECT_INDEX_KEY = 'typesetting-app-v013-project-index';
+const PROJECT_PREFIX = 'typesetting-app-v013-project:';
+const CURRENT_PROJECT_KEY = 'typesetting-app-v013-current-project';
+const TEMPLATE_STORAGE_KEY = 'typesetting-app-v013-templates';
 
-const LEGACY_V11_PROJECT_INDEX_KEY = 'typesetting-app-v011-project-index';
-const LEGACY_V11_PROJECT_PREFIX = 'typesetting-app-v011-project:';
-const LEGACY_V11_CURRENT_PROJECT_KEY = 'typesetting-app-v011-current-project';
-const LEGACY_V11_TEMPLATE_STORAGE_KEY = 'typesetting-app-v011-templates';
+const LEGACY_V12_PROJECT_INDEX_KEY = 'typesetting-app-v012-project-index';
+const LEGACY_V12_PROJECT_PREFIX = 'typesetting-app-v012-project:';
+const LEGACY_V12_CURRENT_PROJECT_KEY = 'typesetting-app-v012-current-project';
+const LEGACY_V12_TEMPLATE_STORAGE_KEY = 'typesetting-app-v012-templates';
 const LEGACY_V1_STORAGE_KEY = 'typesetting-app-v001';
-const MIGRATION_MARKER_KEY = 'typesetting-app-v012-migration-complete';
+const MIGRATION_MARKER_KEY = 'typesetting-app-v013-migration-complete';
 
 const DEFAULT_SETTINGS = Object.freeze({
   paperPreset: 'A5',
@@ -24,6 +24,10 @@ const DEFAULT_SETTINGS = Object.freeze({
   marginBottom: 18,
   marginLeft: 18,
   marginRight: 15,
+  writingMode: 'horizontal-tb',
+  bindingDirection: 'left',
+  verticalTextOrientation: 'mixed',
+  autoTateChuYoko: true,
   fontFamily: "'Noto Serif JP', 'Yu Mincho', 'Hiragino Mincho ProN', serif",
   fontSize: 9,
   lineHeight: 15,
@@ -95,11 +99,11 @@ const DEFAULT_SETTINGS = Object.freeze({
 
 const SAMPLE_MANUSCRIPT = Object.freeze({
   title: 'サンプルタイトル',
-  subtitle: '原稿チェックと日本語組版の確認用原稿',
+  subtitle: '縦書き・右綴じ対応の確認用原稿',
   author: '著者名',
-  body: `# 第1章　組版アプリv012
+  body: `# 第1章　組版アプリv013
 
-これは、組版アプリv012の動作確認用原稿です。右上の「原稿チェック」から、不要な空白や表記揺れを確認できます。
+これは、組版アプリv013の動作確認用原稿です。用紙設定から「縦書き・右綴じ」へ切り替えると、同じ原稿を縦書きで確認できます。
 
 右側の設定を変更すると、用紙サイズ、余白、フォント、文字サイズ、文字間、行間が中央のプレビューへ自動反映されます。
 
@@ -121,11 +125,11 @@ const SAMPLE_MANUSCRIPT = Object.freeze({
 
 行頭・行末の禁則処理、句読点のぶら下がり、ページをまたぐ段落の一行残りを抑える設定を追加しています。通常は「おすすめ設定」のままで使用できます。
 
-右上の「PDF保存」を押すと、目次を含む現在のページプレビューをそのままPDFとして直接保存できます。PCの印刷設定は使用しません。`
+右上の「PDF保存」を押すと、横書き・縦書きとも現在のページプレビューをそのままPDFとして直接保存できます。PCの印刷設定は使用しません。`
 });
 
 const DEFAULT_STATE = Object.freeze({
-  projectName: '組版アプリ v012 サンプル',
+  projectName: '組版アプリ v013 サンプル',
   manuscript: { ...SAMPLE_MANUSCRIPT, paragraphs: [], chapters: [] },
   paragraphOverrides: {},
   settings: DEFAULT_SETTINGS,
@@ -160,6 +164,20 @@ const BUILTIN_TEMPLATES = Object.freeze([
       paperPreset: 'B6', pageWidth: 128, pageHeight: 182,
       marginTop: 14, marginBottom: 16, marginLeft: 17, marginRight: 14,
       fontSize: 8.5, lineHeight: 14.5, titleSize: 18, titleBottom: 12
+    }
+  },
+  {
+    id: 'builtin-a5-vertical-literary',
+    name: 'A5 縦書き・右綴じ',
+    builtIn: true,
+    settings: {
+      ...extractTemplateSettings(DEFAULT_SETTINGS),
+      writingMode: 'vertical-rl', bindingDirection: 'right',
+      paperPreset: 'A5', pageWidth: 148, pageHeight: 210,
+      marginTop: 15, marginBottom: 15, marginLeft: 20, marginRight: 14,
+      fontSize: 9, lineHeight: 15.5, letterSpacing: 0.03,
+      titleSize: 20, titleBottom: 14,
+      heading1Align: 'left', heading2Align: 'left', heading3Align: 'left'
     }
   },
   {
@@ -198,7 +216,7 @@ let manuscriptIssues = [];
 let manuscriptCheckFilter = 'all';
 let manuscriptCheckTimer = null;
 const MAX_MANUSCRIPT_ISSUES = 300;
-const MANUSCRIPT_MODE_KEY = 'typesetting-app-v012-manuscript-mode';
+const MANUSCRIPT_MODE_KEY = 'typesetting-app-v013-manuscript-mode';
 
 window.addEventListener('DOMContentLoaded', init);
 
@@ -217,6 +235,7 @@ function init() {
   updateRunningContentControls();
   updateTocControls();
   updateJapaneseTypesettingControls();
+  updateDocumentLayoutControls();
   scheduleManuscriptCheck(0);
   scheduleRender();
   refreshCurrentProjectStatus();
@@ -227,7 +246,8 @@ function cacheElements() {
     'projectName', 'newBtn', 'projectsBtn', 'saveBtn', 'duplicateBtn', 'templatesBtn',
     'exportBtn', 'importBtn', 'printBtn', 'importFile', 'titleInput', 'subtitleInput',
     'authorInput', 'bodyInput', 'charCount', 'pages', 'pageCount', 'saveStatus',
-    'currentProjectStatus', 'paperPreset', 'pageWidth', 'pageHeight', 'marginTop',
+    'currentProjectStatus', 'documentLayout', 'layoutStatus', 'verticalOptions', 'verticalTextOrientation',
+    'autoTateChuYoko', 'paperPreset', 'pageWidth', 'pageHeight', 'marginTop',
     'marginBottom', 'marginLeft', 'marginRight', 'fontFamily', 'fontSize', 'lineHeight',
     'letterSpacing', 'useTextIndent', 'textIndent', 'textAlign', 'preserveBlankLines', 'blankLineScale',
     'lineBreakMode', 'hangingPunctuation', 'preventWidowOrphan', 'minFragmentLines',
@@ -275,6 +295,7 @@ function cacheElements() {
 function bindEvents() {
   const renderInputs = [
     els.projectName, els.titleInput, els.subtitleInput, els.authorInput,
+    els.documentLayout, els.verticalTextOrientation, els.autoTateChuYoko,
     els.pageWidth, els.pageHeight, els.marginTop, els.marginBottom, els.marginLeft,
     els.marginRight, els.fontFamily, els.fontSize, els.lineHeight, els.letterSpacing,
     els.useTextIndent, els.textIndent, els.textAlign, els.preserveBlankLines, els.blankLineScale,
@@ -336,6 +357,9 @@ function bindEvents() {
   els.deleteChapterBtn.addEventListener('click', deleteSelectedChapter);
 
   els.paperPreset.addEventListener('change', handlePresetChange);
+  els.documentLayout.addEventListener('change', updateDocumentLayoutControls);
+  els.verticalTextOrientation.addEventListener('change', updateDocumentLayoutControls);
+  els.autoTateChuYoko.addEventListener('change', updateDocumentLayoutControls);
   els.viewMode.addEventListener('change', handleViewSettingChange);
   els.zoomSelect.addEventListener('change', handleViewSettingChange);
   els.preserveBlankLines.addEventListener('change', updateBlankLineControls);
@@ -459,7 +483,7 @@ function loadInitialProject() {
     applyState(migrated);
     saveCurrentProject(false);
     updateSaveStatus('v001データを移行済み');
-    showToast('v001の保存データをv012へ移行しました。');
+    showToast('v001の保存データをv013へ移行しました。');
     return;
   }
 
@@ -479,15 +503,15 @@ function migrateLegacyData() {
     return;
   }
 
-  const legacyIndex = readJsonFromStorage(LEGACY_V11_PROJECT_INDEX_KEY, []);
+  const legacyIndex = readJsonFromStorage(LEGACY_V12_PROJECT_INDEX_KEY, []);
   let migratedCount = 0;
   let mappedCurrentId = null;
-  const legacyCurrentId = safeStorageGet(LEGACY_V11_CURRENT_PROJECT_KEY);
+  const legacyCurrentId = safeStorageGet(LEGACY_V12_CURRENT_PROJECT_KEY);
 
   if (Array.isArray(legacyIndex)) {
     legacyIndex.forEach((item) => {
       if (!item?.id) return;
-      const raw = readJsonFromStorage(`${LEGACY_V11_PROJECT_PREFIX}${item.id}`, null);
+      const raw = readJsonFromStorage(`${LEGACY_V12_PROJECT_PREFIX}${item.id}`, null);
       if (!raw) return;
       const state = normalizeState(raw);
       state.metadata.appVersion = APP_VERSION;
@@ -501,7 +525,7 @@ function migrateLegacyData() {
     });
   }
 
-  const legacyTemplates = readJsonFromStorage(LEGACY_V11_TEMPLATE_STORAGE_KEY, []);
+  const legacyTemplates = readJsonFromStorage(LEGACY_V12_TEMPLATE_STORAGE_KEY, []);
   if (Array.isArray(legacyTemplates) && legacyTemplates.length) {
     safeStorageSet(TEMPLATE_STORAGE_KEY, JSON.stringify(legacyTemplates));
   }
@@ -510,7 +534,7 @@ function migrateLegacyData() {
   safeStorageSet(MIGRATION_MARKER_KEY, 'true');
 
   if (migratedCount > 0) {
-    showToast(`v011のプロジェクト${migratedCount}件をv012へ移行しました。`);
+    showToast(`v012のプロジェクト${migratedCount}件をv013へ移行しました。`);
   }
 }
 
@@ -1677,7 +1701,7 @@ function paginateTocEntries(entries, settings) {
 function createTocTitleElement(text, settings) {
   const element = document.createElement('h2');
   element.className = 'toc-title';
-  element.textContent = text || '目次';
+  setTypesetText(element, text || '目次', settings);
   element.style.fontFamily = settings.heading1FontFamily || settings.fontFamily;
   element.style.fontSize = `${sanitizeNumber(settings.tocTitleSize, 18)}pt`;
   return element;
@@ -1686,7 +1710,7 @@ function createTocTitleElement(text, settings) {
 function createTocContinuationElement(settings) {
   const element = document.createElement('div');
   element.className = 'toc-continuation-title';
-  element.textContent = `${String(settings.tocTitle || '目次')}（続き）`;
+  setTypesetText(element, `${String(settings.tocTitle || '目次')}（続き）`, settings);
   element.style.fontFamily = settings.heading1FontFamily || settings.fontFamily;
   element.style.fontSize = `${Math.max(9, sanitizeNumber(settings.tocFontSize, 9) + 1)}pt`;
   return element;
@@ -1707,7 +1731,7 @@ function createTocEntryElement(entry, settings) {
 
   const title = document.createElement('span');
   title.className = 'toc-entry-title';
-  title.textContent = entry.text;
+  setTypesetText(title, entry.text, settings);
   row.appendChild(title);
 
   if (showLeader) {
@@ -1720,7 +1744,7 @@ function createTocEntryElement(entry, settings) {
   if (showPageNumber) {
     const page = document.createElement('span');
     page.className = 'toc-entry-page';
-    page.textContent = String(entry.pageNumber);
+    setTypesetText(page, String(entry.pageNumber), settings);
     row.appendChild(page);
   }
   return row;
@@ -1729,7 +1753,7 @@ function createTocEntryElement(entry, settings) {
 function createTocEmptyElement(text, settings) {
   const element = document.createElement('p');
   element.className = 'toc-empty-message';
-  element.textContent = text;
+  setTypesetText(element, text, settings);
   element.style.fontFamily = settings.fontFamily;
   element.style.fontSize = `${sanitizeNumber(settings.tocFontSize, 9)}pt`;
   return element;
@@ -1741,7 +1765,7 @@ function paginate(state) {
   const pages = [[]];
   let pageIndex = 0;
 
-  const heading = state.settings.showDocumentHeading ? createHeadingElement(state.manuscript) : null;
+  const heading = state.settings.showDocumentHeading ? createHeadingElement(state.manuscript, state.settings) : null;
   if (heading) {
     content.appendChild(heading.cloneNode(true));
     pages[pageIndex].push({ type: 'heading', data: state.manuscript });
@@ -1962,16 +1986,19 @@ function paginate(state) {
 function createMeasurePage() {
   els.measureRoot.replaceChildren();
   const paper = document.createElement('div');
-  paper.className = 'paper';
+  const settings = collectSettings();
+  paper.className = `paper ${isVerticalWriting(settings) ? 'writing-vertical' : 'writing-horizontal'}`;
+  applyPhysicalPageMargins(paper, 0, settings);
   const content = document.createElement('div');
-  content.className = 'page-content';
+  content.className = `page-content ${isVerticalWriting(settings) ? 'writing-vertical' : 'writing-horizontal'}`;
   paper.appendChild(content);
   els.measureRoot.appendChild(paper);
   return paper;
 }
 
 function fits(content) {
-  return content.scrollHeight <= content.clientHeight + 0.5;
+  const vertical = String(getComputedStyle(content).writingMode || '').startsWith('vertical');
+  return vertical ? content.scrollWidth <= content.clientWidth + 0.5 : content.scrollHeight <= content.clientHeight + 0.5;
 }
 
 function measureParagraphLineCount(text, options = {}) {
@@ -1991,15 +2018,17 @@ function measureParagraphLineCount(text, options = {}) {
     settings: options.settings || DEFAULT_SETTINGS,
     isFinal: false
   });
-  paragraph.style.paddingTop = '0';
-  paragraph.style.paddingBottom = '0';
+  paragraph.style.paddingBlockStart = '0';
+  paragraph.style.paddingBlockEnd = '0';
   content.appendChild(paragraph);
 
   const computed = getComputedStyle(paragraph);
   const lineHeight = parseFloat(computed.lineHeight) || sanitizeNumber(options.settings?.lineHeight, 15) * (96 / 72);
-  const height = paragraph.getBoundingClientRect().height;
+  const rect = paragraph.getBoundingClientRect();
+  const vertical = isVerticalWriting(options.settings || DEFAULT_SETTINGS);
+  const extent = vertical ? rect.width : rect.height;
   paper.remove();
-  return Math.max(1, Math.round(height / Math.max(1, lineHeight)));
+  return Math.max(1, Math.round(extent / Math.max(1, lineHeight)));
 }
 
 function balanceParagraphSplit(text, splitIndex, options = {}) {
@@ -2118,7 +2147,7 @@ function findSafeJapaneseBreak(text, index, maxDistance = 64) {
   return fallback;
 }
 
-function createHeadingElement(manuscript) {
+function createHeadingElement(manuscript, settings = DEFAULT_SETTINGS) {
   if (!manuscript.title && !manuscript.subtitle && !manuscript.author) return null;
   const wrap = document.createElement('section');
   wrap.className = 'document-heading';
@@ -2126,19 +2155,19 @@ function createHeadingElement(manuscript) {
   if (manuscript.title) {
     const title = document.createElement('h3');
     title.className = 'doc-title';
-    title.textContent = manuscript.title;
+    setTypesetText(title, manuscript.title, settings);
     wrap.appendChild(title);
   }
   if (manuscript.subtitle) {
     const subtitle = document.createElement('p');
     subtitle.className = 'doc-subtitle';
-    subtitle.textContent = manuscript.subtitle;
+    setTypesetText(subtitle, manuscript.subtitle, settings);
     wrap.appendChild(subtitle);
   }
   if (manuscript.author) {
     const author = document.createElement('p');
     author.className = 'doc-author';
-    author.textContent = manuscript.author;
+    setTypesetText(author, manuscript.author, settings);
     wrap.appendChild(author);
   }
   return wrap;
@@ -2174,13 +2203,13 @@ function createBodyHeadingElement(record, settings = DEFAULT_SETTINGS, options =
   const tagName = headingSettings.level === 1 ? 'h2' : headingSettings.level === 2 ? 'h3' : 'h4';
   const heading = document.createElement(tagName);
   heading.className = `body-heading heading-level-${headingSettings.level}`;
-  heading.textContent = record.text;
+  setTypesetText(heading, record.text, settings);
   heading.dataset.headingLevel = String(headingSettings.level);
   if (record.id) heading.dataset.blockId = record.id;
   heading.style.fontFamily = headingSettings.fontFamily;
   heading.style.fontSize = `${headingSettings.size}pt`;
   heading.style.lineHeight = headingSettings.level === 1 ? '1.45' : '1.5';
-  heading.style.textAlign = headingSettings.align;
+  heading.style.textAlign = resolveTypesetAlign(headingSettings.align, settings);
 
   const effectiveSettings = { ...DEFAULT_SETTINGS, ...(settings || {}) };
   const blankCount = effectiveSettings.preserveBlankLines
@@ -2192,9 +2221,9 @@ function createBodyHeadingElement(record, settings = DEFAULT_SETTINGS, options =
   const beforeParts = [];
   if (blankSpace > 0) beforeParts.push(`${blankSpace}pt`);
   if (headingSettings.spaceBefore > 0) beforeParts.push(`${headingSettings.spaceBefore}mm`);
-  if (beforeParts.length === 1) heading.style.paddingTop = beforeParts[0];
-  if (beforeParts.length > 1) heading.style.paddingTop = `calc(${beforeParts.join(' + ')})`;
-  if (headingSettings.spaceAfter > 0) heading.style.paddingBottom = `${headingSettings.spaceAfter}mm`;
+  if (beforeParts.length === 1) heading.style.paddingBlockStart = beforeParts[0];
+  if (beforeParts.length > 1) heading.style.paddingBlockStart = `calc(${beforeParts.join(' + ')})`;
+  if (headingSettings.spaceAfter > 0) heading.style.paddingBlockEnd = `${headingSettings.spaceAfter}mm`;
 
   return heading;
 }
@@ -2235,7 +2264,7 @@ function createParagraphElement(text, options = {}) {
 
   const paragraph = document.createElement('p');
   paragraph.className = 'body-paragraph';
-  paragraph.textContent = text;
+  setTypesetText(paragraph, text, settings);
   if (continuation) paragraph.style.textIndent = '0';
   applyParagraphOverrideStyles(
     paragraph,
@@ -2270,7 +2299,7 @@ function applyParagraphOverrideStyles(
   if (Number.isFinite(normalized.fontSize)) paragraph.style.fontSize = `${normalized.fontSize}pt`;
   if (Number.isFinite(normalized.lineHeight)) paragraph.style.lineHeight = `${normalized.lineHeight}pt`;
   if (Number.isFinite(normalized.letterSpacing)) paragraph.style.letterSpacing = `${normalized.letterSpacing}em`;
-  if (normalized.textAlign && normalized.textAlign !== 'inherit') paragraph.style.textAlign = normalized.textAlign;
+  if (normalized.textAlign && normalized.textAlign !== 'inherit') paragraph.style.textAlign = resolveTypesetAlign(normalized.textAlign, effectiveSettings);
   if (!continuation && Number.isFinite(normalized.textIndent)) paragraph.style.textIndent = `${normalized.textIndent}em`;
 
   if (!continuation) {
@@ -2287,12 +2316,12 @@ function applyParagraphOverrideStyles(
     if (Number.isFinite(normalized.spaceBefore) && normalized.spaceBefore > 0) {
       beforeParts.push(`${normalized.spaceBefore}mm`);
     }
-    if (beforeParts.length === 1) paragraph.style.paddingTop = beforeParts[0];
-    if (beforeParts.length > 1) paragraph.style.paddingTop = `calc(${beforeParts.join(' + ')})`;
+    if (beforeParts.length === 1) paragraph.style.paddingBlockStart = beforeParts[0];
+    if (beforeParts.length > 1) paragraph.style.paddingBlockStart = `calc(${beforeParts.join(' + ')})`;
   }
 
   if (isFinal && Number.isFinite(normalized.spaceAfter) && normalized.spaceAfter > 0) {
-    paragraph.style.paddingBottom = `${normalized.spaceAfter}mm`;
+    paragraph.style.paddingBlockEnd = `${normalized.spaceAfter}mm`;
   }
 }
 
@@ -2303,7 +2332,12 @@ function createBlankSpaceElement(lines, settings = DEFAULT_SETTINGS) {
   const count = sanitizeBlankLineCount(lines);
   const lineHeight = sanitizeNumber(effectiveSettings.lineHeight, 15);
   const scale = Math.max(0, sanitizeNumber(effectiveSettings.blankLineScale, 1));
-  spacer.style.height = `${count * lineHeight * scale}pt`;
+  if (isVerticalWriting(effectiveSettings)) {
+    spacer.style.width = `${count * lineHeight * scale}pt`;
+    spacer.style.height = '100%';
+  } else {
+    spacer.style.height = `${count * lineHeight * scale}pt`;
+  }
   spacer.setAttribute('aria-hidden', 'true');
   return spacer;
 }
@@ -2394,10 +2428,11 @@ function buildPreview(pageFragments, settings, manuscript) {
 
   pageFragments.forEach((fragments, index) => {
     const paper = document.createElement('article');
-    paper.className = 'paper';
+    paper.className = `paper ${isVerticalWriting(settings) ? 'writing-vertical' : 'writing-horizontal'}`;
     paper.dataset.page = String(index + 1);
+    applyPhysicalPageMargins(paper, index, settings);
     const content = document.createElement('div');
-    content.className = 'page-content';
+    content.className = `page-content ${isVerticalWriting(settings) ? 'writing-vertical' : 'writing-horizontal'}`;
 
     let pageChapter = runningChapter;
     fragments.forEach((fragment) => {
@@ -2406,7 +2441,7 @@ function buildPreview(pageFragments, settings, manuscript) {
         runningChapter = pageChapter;
       }
       if (fragment.type === 'heading') {
-        const heading = createHeadingElement(fragment.data);
+        const heading = createHeadingElement(fragment.data, settings);
         if (heading) content.appendChild(heading);
       } else if (fragment.type === 'toc-title') {
         content.appendChild(createTocTitleElement(fragment.text, settings));
@@ -2449,19 +2484,19 @@ function appendRunningElements(paper, pageIndex, settings, manuscript, chapterTi
 
   if (settings.showHeader && (!isFirstPage || settings.headerFirstPage)) {
     const text = resolveRunningText(settings.headerContent, settings.headerCustomText, manuscript, chapterTitle);
-    if (text) addMarginItem(headerArea, settings.headerPosition, text, 'running-text', pageIndex);
+    if (text) addMarginItem(headerArea, settings.headerPosition, text, 'running-text', pageIndex, settings);
   }
 
   if (settings.showFooterText && (!isFirstPage || settings.footerFirstPage)) {
     const text = resolveRunningText(settings.footerContent, settings.footerCustomText, manuscript, chapterTitle);
-    if (text) addMarginItem(footerArea, settings.footerPosition, text, 'running-text', pageIndex);
+    if (text) addMarginItem(footerArea, settings.footerPosition, text, 'running-text', pageIndex, settings);
   }
 
   if (settings.showPageNumbers && (!isFirstPage || settings.firstPageNumber)) {
     const value = Math.trunc(sanitizeNumber(settings.pageNumberStart, 1)) + pageIndex;
     const [areaName, position] = String(settings.pageNumberPosition || 'bottom-center').split('-');
     const area = areaName === 'top' ? headerArea : footerArea;
-    addMarginItem(area, position || 'center', String(value), 'page-number-item', pageIndex);
+    addMarginItem(area, position || 'center', String(value), 'page-number-item', pageIndex, settings);
   }
 
   if (headerArea.dataset.hasItems === 'true') paper.appendChild(headerArea);
@@ -2480,22 +2515,27 @@ function createMarginArea(kind) {
   return area;
 }
 
-function addMarginItem(area, position, text, className, pageIndex) {
-  const resolved = resolveMarginPosition(position, pageIndex);
+function addMarginItem(area, position, text, className, pageIndex, settings = DEFAULT_SETTINGS) {
+  const resolved = resolveMarginPosition(position, pageIndex, settings);
   const slot = area.querySelector(`[data-slot="${resolved}"]`);
   if (!slot) return;
   const item = document.createElement('span');
   item.className = className;
-  item.textContent = text;
+  setTypesetText(item, text, settings);
   slot.appendChild(item);
   area.dataset.hasItems = 'true';
 }
 
-function resolveMarginPosition(position, pageIndex) {
+function resolveMarginPosition(position, pageIndex, settings = DEFAULT_SETTINGS) {
   if (position === 'center') return 'center';
   const isOddPage = pageIndex % 2 === 0;
-  if (position === 'outer') return isOddPage ? 'right' : 'left';
-  if (position === 'inner') return isOddPage ? 'left' : 'right';
+  const rightBound = settings.bindingDirection === 'right';
+  if (position === 'outer') return rightBound
+    ? (isOddPage ? 'left' : 'right')
+    : (isOddPage ? 'right' : 'left');
+  if (position === 'inner') return rightBound
+    ? (isOddPage ? 'right' : 'left')
+    : (isOddPage ? 'left' : 'right');
   return ['left', 'right'].includes(position) ? position : 'center';
 }
 
@@ -2506,6 +2546,72 @@ function resolveRunningText(contentType, customText, manuscript, chapterTitle) {
   return String(customText || '');
 }
 
+function isVerticalWriting(settings = DEFAULT_SETTINGS) {
+  return settings?.writingMode === 'vertical-rl';
+}
+
+function resolveTypesetAlign(value, settings = DEFAULT_SETTINGS) {
+  const align = ['left', 'center', 'right', 'justify', 'start', 'end'].includes(value) ? value : 'justify';
+  if (!isVerticalWriting(settings)) return align;
+  if (align === 'left') return 'start';
+  if (align === 'right') return 'end';
+  return align;
+}
+
+function setTypesetText(element, text, settings = DEFAULT_SETTINGS) {
+  element.replaceChildren();
+  const value = String(text ?? '');
+  if (!isVerticalWriting(settings) || !settings.autoTateChuYoko) {
+    element.textContent = value;
+    return;
+  }
+  const pattern = /[0-9]+/g;
+  let cursor = 0;
+  let match;
+  while ((match = pattern.exec(value))) {
+    if (match.index > cursor) element.appendChild(document.createTextNode(value.slice(cursor, match.index)));
+    if (match[0].length <= 3) {
+      const combined = document.createElement('span');
+      combined.className = 'tate-chu-yoko';
+      combined.textContent = match[0];
+      element.appendChild(combined);
+    } else {
+      element.appendChild(document.createTextNode(match[0]));
+    }
+    cursor = match.index + match[0].length;
+  }
+  if (cursor < value.length) element.appendChild(document.createTextNode(value.slice(cursor)));
+}
+
+function getPhysicalPageMargins(pageIndex, settings = DEFAULT_SETTINGS) {
+  const inside = Math.max(0, sanitizeNumber(settings.marginLeft, 18));
+  const outside = Math.max(0, sanitizeNumber(settings.marginRight, 15));
+  const isOddPage = pageIndex % 2 === 0;
+  const rightBound = settings.bindingDirection === 'right';
+  const insideOnRight = rightBound ? isOddPage : !isOddPage;
+  return { left: insideOnRight ? outside : inside, right: insideOnRight ? inside : outside };
+}
+
+function applyPhysicalPageMargins(paper, pageIndex, settings = DEFAULT_SETTINGS) {
+  const margins = getPhysicalPageMargins(pageIndex, settings);
+  paper.style.setProperty('--page-margin-left', `${margins.left}mm`);
+  paper.style.setProperty('--page-margin-right', `${margins.right}mm`);
+}
+
+function updateDocumentLayoutControls() {
+  const vertical = els.documentLayout?.value === 'vertical-rtl';
+  if (els.verticalOptions) els.verticalOptions.hidden = !vertical;
+  if (els.layoutStatus) {
+    els.layoutStatus.textContent = vertical
+      ? '縦書き・右綴じ：ページは右から左へ読み進めます。'
+      : '横書き・左綴じ：一般的な冊子・資料向けです。';
+  }
+  if (!isApplyingState) {
+    applyViewSettings();
+    scheduleRender();
+  }
+}
+
 function applyCssVariables(settings) {
   const root = document.documentElement;
   root.style.setProperty('--page-width', `${settings.pageWidth}mm`);
@@ -2514,13 +2620,15 @@ function applyCssVariables(settings) {
   root.style.setProperty('--page-margin-bottom', `${settings.marginBottom}mm`);
   root.style.setProperty('--page-margin-left', `${settings.marginLeft}mm`);
   root.style.setProperty('--page-margin-right', `${settings.marginRight}mm`);
+  root.style.setProperty('--writing-mode', settings.writingMode === 'vertical-rl' ? 'vertical-rl' : 'horizontal-tb');
+  root.style.setProperty('--text-orientation', settings.verticalTextOrientation === 'upright' ? 'upright' : 'mixed');
   root.style.setProperty('--body-font', settings.fontFamily);
   root.style.setProperty('--body-size', `${settings.fontSize}pt`);
   root.style.setProperty('--body-leading', `${settings.lineHeight}pt`);
   root.style.setProperty('--body-tracking', `${settings.letterSpacing}em`);
   const bodyIndent = settings.useTextIndent ? sanitizeNumber(settings.textIndent, 1) : 0;
   root.style.setProperty('--body-indent', `${bodyIndent}em`);
-  root.style.setProperty('--body-align', settings.textAlign);
+  root.style.setProperty('--body-align', resolveTypesetAlign(settings.textAlign, settings));
   root.style.setProperty('--body-line-break', settings.lineBreakMode === 'strict' ? 'strict' : 'normal');
   root.style.setProperty('--body-hanging-punctuation', settings.hangingPunctuation ? 'allow-end' : 'none');
   root.style.setProperty('--title-size', `${settings.titleSize}pt`);
@@ -2533,6 +2641,11 @@ function applyViewSettings() {
   const zoom = Number(els.zoomSelect.value) || 0.7;
   els.pages.classList.toggle('single', mode === 'single');
   els.pages.classList.toggle('spread', mode === 'spread');
+  const vertical = els.documentLayout?.value === 'vertical-rtl';
+  els.pages.classList.toggle('writing-vertical', vertical);
+  els.pages.classList.toggle('writing-horizontal', !vertical);
+  els.pages.classList.toggle('binding-right', vertical);
+  els.pages.classList.toggle('binding-left', !vertical);
   els.pages.style.zoom = String(zoom);
 }
 
@@ -2588,6 +2701,10 @@ function collectSettings() {
     marginBottom: sanitizeNumber(els.marginBottom.value, 18),
     marginLeft: sanitizeNumber(els.marginLeft.value, 18),
     marginRight: sanitizeNumber(els.marginRight.value, 15),
+    writingMode: els.documentLayout.value === 'vertical-rtl' ? 'vertical-rl' : 'horizontal-tb',
+    bindingDirection: els.documentLayout.value === 'vertical-rtl' ? 'right' : 'left',
+    verticalTextOrientation: els.verticalTextOrientation.value === 'upright' ? 'upright' : 'mixed',
+    autoTateChuYoko: els.autoTateChuYoko.checked,
     fontFamily: els.fontFamily.value,
     fontSize: sanitizeNumber(els.fontSize.value, 9),
     lineHeight: sanitizeNumber(els.lineHeight.value, 15),
@@ -2687,6 +2804,10 @@ function applyState(state) {
 
 function applySettingsToInputs(settings) {
   const normalized = { ...deepClone(DEFAULT_SETTINGS), ...(settings || {}) };
+  els.documentLayout.value = normalized.writingMode === 'vertical-rl' ? 'vertical-rtl' : 'horizontal-ltr';
+  els.verticalTextOrientation.value = normalized.verticalTextOrientation === 'upright' ? 'upright' : 'mixed';
+  els.autoTateChuYoko.checked = normalized.autoTateChuYoko !== false;
+  updateDocumentLayoutControls();
   els.paperPreset.value = normalized.paperPreset;
   els.pageWidth.value = normalized.pageWidth;
   els.pageHeight.value = normalized.pageHeight;
@@ -3422,7 +3543,8 @@ function describeTemplate(settings) {
     ? `${settings.pageWidth} × ${settings.pageHeight} mm`
     : `${settings.paperPreset}（${settings.pageWidth} × ${settings.pageHeight} mm）`;
   const indentLabel = settings.useTextIndent ? `字下げ${settings.textIndent}字` : '字下げなし';
-  return `${paper} ／ ${settings.fontSize}pt・行間${settings.lineHeight}pt・${indentLabel} ／ 余白 上${settings.marginTop} 下${settings.marginBottom} 左${settings.marginLeft} 右${settings.marginRight}mm`;
+  const layoutLabel = settings.writingMode === 'vertical-rl' ? '縦書き・右綴じ' : '横書き・左綴じ';
+  return `${layoutLabel} ／ ${paper} ／ ${settings.fontSize}pt・行間${settings.lineHeight}pt・${indentLabel} ／ 余白 上${settings.marginTop} 下${settings.marginBottom} 内${settings.marginLeft} 外${settings.marginRight}mm`;
 }
 
 function exportJson() {
