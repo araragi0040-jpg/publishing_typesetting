@@ -1,20 +1,20 @@
 'use strict';
 
-const APP_VERSION = 'v008';
-const SCHEMA_VERSION = 8;
+const APP_VERSION = 'v009';
+const SCHEMA_VERSION = 9;
 const AUTOSAVE_DELAY = 700;
 
-const PROJECT_INDEX_KEY = 'typesetting-app-v008-project-index';
-const PROJECT_PREFIX = 'typesetting-app-v008-project:';
-const CURRENT_PROJECT_KEY = 'typesetting-app-v008-current-project';
-const TEMPLATE_STORAGE_KEY = 'typesetting-app-v008-templates';
+const PROJECT_INDEX_KEY = 'typesetting-app-v009-project-index';
+const PROJECT_PREFIX = 'typesetting-app-v009-project:';
+const CURRENT_PROJECT_KEY = 'typesetting-app-v009-current-project';
+const TEMPLATE_STORAGE_KEY = 'typesetting-app-v009-templates';
 
-const LEGACY_V7_PROJECT_INDEX_KEY = 'typesetting-app-v007-project-index';
-const LEGACY_V7_PROJECT_PREFIX = 'typesetting-app-v007-project:';
-const LEGACY_V7_CURRENT_PROJECT_KEY = 'typesetting-app-v007-current-project';
-const LEGACY_V7_TEMPLATE_STORAGE_KEY = 'typesetting-app-v007-templates';
+const LEGACY_V8_PROJECT_INDEX_KEY = 'typesetting-app-v008-project-index';
+const LEGACY_V8_PROJECT_PREFIX = 'typesetting-app-v008-project:';
+const LEGACY_V8_CURRENT_PROJECT_KEY = 'typesetting-app-v008-current-project';
+const LEGACY_V8_TEMPLATE_STORAGE_KEY = 'typesetting-app-v008-templates';
 const LEGACY_V1_STORAGE_KEY = 'typesetting-app-v001';
-const MIGRATION_MARKER_KEY = 'typesetting-app-v008-migration-complete';
+const MIGRATION_MARKER_KEY = 'typesetting-app-v009-migration-complete';
 
 const DEFAULT_SETTINGS = Object.freeze({
   paperPreset: 'A5',
@@ -82,9 +82,9 @@ const SAMPLE_MANUSCRIPT = Object.freeze({
   title: 'サンプルタイトル',
   subtitle: '章管理と全文編集の確認用原稿',
   author: '著者名',
-  body: `# 第1章　組版アプリv008
+  body: `# 第1章　組版アプリv009
 
-これは、組版アプリv008の動作確認用原稿です。
+これは、組版アプリv009の動作確認用原稿です。
 
 右側の設定を変更すると、用紙サイズ、余白、フォント、文字サイズ、文字間、行間が中央のプレビューへ自動反映されます。
 
@@ -100,11 +100,11 @@ const SAMPLE_MANUSCRIPT = Object.freeze({
 
 章の追加、複製、削除、並び替えにも対応しています。JSON出力はバックアップや別端末への移動に使用してください。
 
-PDFとして保存する際は、右上の「PDF出力」を押し、ブラウザの印刷画面で余白なし、倍率100%を推奨します。`
+右上の「PDF保存」を押すと、現在のページプレビューをそのままPDFとして直接保存できます。PCの印刷設定は使用しません。`
 });
 
 const DEFAULT_STATE = Object.freeze({
-  projectName: '組版アプリ v008 サンプル',
+  projectName: '組版アプリ v009 サンプル',
   manuscript: { ...SAMPLE_MANUSCRIPT, paragraphs: [], chapters: [] },
   paragraphOverrides: {},
   settings: DEFAULT_SETTINGS,
@@ -173,7 +173,7 @@ let manuscriptEditorMode = 'full';
 let chapterModel = [];
 let selectedChapterIndex = -1;
 let isApplyingChapterEdit = false;
-const MANUSCRIPT_MODE_KEY = 'typesetting-app-v008-manuscript-mode';
+const MANUSCRIPT_MODE_KEY = 'typesetting-app-v009-manuscript-mode';
 
 window.addEventListener('DOMContentLoaded', init);
 
@@ -225,7 +225,8 @@ function cacheElements() {
     'chapterSummary', 'chapterList', 'addChapterBtn', 'addFirstChapterBtn', 'chapterEditCard',
     'selectedChapterLabel', 'selectedChapterMeta', 'chapterEmptyState', 'chapterControls',
     'chapterTitleInput', 'chapterBodyInput', 'chapterMoveUpBtn', 'chapterMoveDownBtn',
-    'duplicateChapterBtn', 'deleteChapterBtn'
+    'duplicateChapterBtn', 'deleteChapterBtn',
+    'pdfExportOverlay', 'pdfExportStatus', 'pdfExportProgress'
   ];
 
   ids.forEach((id) => {
@@ -337,7 +338,7 @@ function bindEvents() {
   els.exportBtn.addEventListener('click', exportJson);
   els.importBtn.addEventListener('click', () => els.importFile.click());
   els.importFile.addEventListener('change', importJson);
-  els.printBtn.addEventListener('click', printDocument);
+  els.printBtn.addEventListener('click', exportPdf);
   els.resetSettingsBtn.addEventListener('click', resetSettings);
 
   els.createProjectFromModalBtn.addEventListener('click', () => {
@@ -363,10 +364,6 @@ function bindEvents() {
     document.querySelectorAll('.modal-backdrop:not([hidden])').forEach((modal) => closeModal(modal.id));
   });
 
-  window.addEventListener('beforeprint', () => {
-    applyPrintPageRule();
-    document.documentElement.style.setProperty('--preview-zoom', '1');
-  });
 
   window.addEventListener('beforeunload', () => {
     clearTimeout(autosaveTimer);
@@ -401,7 +398,7 @@ function loadInitialProject() {
     applyState(migrated);
     saveCurrentProject(false);
     updateSaveStatus('v001データを移行済み');
-    showToast('v001の保存データをv008へ移行しました。');
+    showToast('v001の保存データをv009へ移行しました。');
     return;
   }
 
@@ -421,15 +418,15 @@ function migrateLegacyData() {
     return;
   }
 
-  const legacyIndex = readJsonFromStorage(LEGACY_V7_PROJECT_INDEX_KEY, []);
+  const legacyIndex = readJsonFromStorage(LEGACY_V8_PROJECT_INDEX_KEY, []);
   let migratedCount = 0;
   let mappedCurrentId = null;
-  const legacyCurrentId = safeStorageGet(LEGACY_V7_CURRENT_PROJECT_KEY);
+  const legacyCurrentId = safeStorageGet(LEGACY_V8_CURRENT_PROJECT_KEY);
 
   if (Array.isArray(legacyIndex)) {
     legacyIndex.forEach((item) => {
       if (!item?.id) return;
-      const raw = readJsonFromStorage(`${LEGACY_V7_PROJECT_PREFIX}${item.id}`, null);
+      const raw = readJsonFromStorage(`${LEGACY_V8_PROJECT_PREFIX}${item.id}`, null);
       if (!raw) return;
       const state = normalizeState(raw);
       state.metadata.appVersion = APP_VERSION;
@@ -443,7 +440,7 @@ function migrateLegacyData() {
     });
   }
 
-  const legacyTemplates = readJsonFromStorage(LEGACY_V7_TEMPLATE_STORAGE_KEY, []);
+  const legacyTemplates = readJsonFromStorage(LEGACY_V8_TEMPLATE_STORAGE_KEY, []);
   if (Array.isArray(legacyTemplates) && legacyTemplates.length) {
     safeStorageSet(TEMPLATE_STORAGE_KEY, JSON.stringify(legacyTemplates));
   }
@@ -452,7 +449,7 @@ function migrateLegacyData() {
   safeStorageSet(MIGRATION_MARKER_KEY, 'true');
 
   if (migratedCount > 0) {
-    showToast(`v007のプロジェクト${migratedCount}件をv008へ移行しました。`);
+    showToast(`v008のプロジェクト${migratedCount}件をv009へ移行しました。`);
   }
 }
 
@@ -854,11 +851,11 @@ function saveSettingsAccordionState() {
     const key = details.id || `section-${index}`;
     state[key] = details.open;
   });
-  safeStorageSet('typesetting-app-v008-settings-ui', JSON.stringify(state));
+  safeStorageSet('typesetting-app-v009-settings-ui', JSON.stringify(state));
 }
 
 function restoreSettingsAccordions() {
-  const state = readJsonFromStorage('typesetting-app-v008-settings-ui', null);
+  const state = readJsonFromStorage('typesetting-app-v009-settings-ui', null);
   if (!state || typeof state !== 'object') return;
   document.querySelectorAll('.settings-accordion').forEach((details, index) => {
     const key = details.id || `section-${index}`;
@@ -2504,12 +2501,160 @@ async function importJson(event) {
   }
 }
 
-function printDocument() {
+async function exportPdf() {
+  if (els.printBtn.disabled) return;
+
+  const html2canvasRenderer = window.html2canvas;
+  const JsPdfConstructor = window.jspdf?.jsPDF;
+  if (typeof html2canvasRenderer !== 'function' || typeof JsPdfConstructor !== 'function') {
+    showToast('PDF生成ライブラリを読み込めませんでした。ページを再読み込みしてください。');
+    return;
+  }
+
   renderDocument();
-  applyPrintPageRule();
   saveCurrentProject(false);
-  showToast('印刷画面では「余白なし・倍率100%」を推奨します。');
-  setTimeout(() => window.print(), 80);
+  await waitForFrames(2);
+
+  const papers = Array.from(els.pages.querySelectorAll('.paper'));
+  if (!papers.length) {
+    showToast('出力できるページがありません。');
+    return;
+  }
+
+  const state = collectState();
+  const pageWidth = Math.max(1, sanitizeNumber(state.settings.pageWidth, 148));
+  const pageHeight = Math.max(1, sanitizeNumber(state.settings.pageHeight, 210));
+  const orientation = pageWidth > pageHeight ? 'landscape' : 'portrait';
+  const renderScale = choosePdfRenderScale(papers.length, pageWidth, pageHeight);
+  const originalButtonText = els.printBtn.textContent;
+  let stage = null;
+
+  try {
+    setPdfExportBusy(true, 'ページを準備しています。', 0);
+    els.printBtn.textContent = '生成中…';
+    updateSaveStatus('PDF生成中');
+
+    if (document.fonts?.ready) await document.fonts.ready;
+    stage = createPdfExportStage(pageWidth, pageHeight);
+
+    const pdf = new JsPdfConstructor({
+      orientation,
+      unit: 'mm',
+      format: [pageWidth, pageHeight],
+      compress: true,
+      putOnlyUsedFonts: true
+    });
+
+    pdf.setProperties({
+      title: state.manuscript.title || state.projectName,
+      author: state.manuscript.author || '',
+      subject: '組版アプリで生成したレイアウト確認用PDF',
+      creator: `組版アプリ ${APP_VERSION}`
+    });
+
+    for (let index = 0; index < papers.length; index += 1) {
+      const progress = Math.round((index / papers.length) * 100);
+      setPdfExportBusy(true, `${index + 1} / ${papers.length} ページを生成しています。`, progress);
+
+      const clone = preparePaperCloneForPdf(papers[index]);
+      stage.replaceChildren(clone);
+      await waitForFrames(1);
+
+      const canvas = await html2canvasRenderer(clone, {
+        backgroundColor: '#ffffff',
+        scale: renderScale,
+        useCORS: true,
+        allowTaint: false,
+        logging: false,
+        removeContainer: true,
+        imageTimeout: 15000,
+        width: clone.offsetWidth,
+        height: clone.offsetHeight,
+        windowWidth: clone.offsetWidth,
+        windowHeight: clone.offsetHeight,
+        scrollX: 0,
+        scrollY: 0
+      });
+
+      if (index > 0) pdf.addPage([pageWidth, pageHeight], orientation);
+      let imageData = canvas.toDataURL('image/jpeg', 0.96);
+      pdf.addImage(imageData, 'JPEG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
+
+      imageData = null;
+      canvas.width = 1;
+      canvas.height = 1;
+      stage.replaceChildren();
+      await waitForFrames(1);
+    }
+
+    setPdfExportBusy(true, 'PDFファイルをまとめています。', 100);
+    await waitForFrames(1);
+    const fileName = `${sanitizeFileName(state.projectName)}_${dateStamp()}.pdf`;
+    pdf.save(fileName);
+    updateSaveStatus('PDF保存済み');
+    showToast('アプリのレイアウトを固定したPDFを保存しました。');
+  } catch (error) {
+    console.error(error);
+    updateSaveStatus('PDF生成エラー');
+    showToast('PDF生成に失敗しました。ページ数を減らすか、再読み込み後にお試しください。');
+  } finally {
+    stage?.remove();
+    els.printBtn.textContent = originalButtonText;
+    setPdfExportBusy(false);
+  }
+}
+
+function choosePdfRenderScale(pageCount, pageWidth, pageHeight) {
+  const pageArea = pageWidth * pageHeight;
+  if (pageCount >= 80 || pageArea >= 60000) return 1.75;
+  if (pageCount >= 40 || pageArea >= 45000) return 2;
+  return 2.25;
+}
+
+function createPdfExportStage(pageWidth, pageHeight) {
+  const stage = document.createElement('div');
+  stage.className = 'pdf-export-stage';
+  stage.style.width = `${pageWidth}mm`;
+  stage.style.height = `${pageHeight}mm`;
+  document.body.appendChild(stage);
+  return stage;
+}
+
+function preparePaperCloneForPdf(sourcePaper) {
+  const clone = sourcePaper.cloneNode(true);
+  clone.classList.add('pdf-export-paper');
+  clone.style.boxShadow = 'none';
+  clone.style.margin = '0';
+  clone.style.transform = 'none';
+  clone.style.zoom = '1';
+  clone.querySelectorAll('.page-content').forEach((content) => content.classList.remove('guides'));
+  clone.querySelectorAll('.selected-paragraph, .has-override').forEach((element) => {
+    element.classList.remove('selected-paragraph', 'has-override');
+  });
+  return clone;
+}
+
+function setPdfExportBusy(busy, status = '', progress = 0) {
+  els.printBtn.disabled = busy;
+  els.pdfExportOverlay.hidden = !busy;
+  document.body.classList.toggle('pdf-exporting', busy);
+  if (busy) {
+    els.pdfExportStatus.textContent = status;
+    els.pdfExportProgress.style.width = `${Math.max(0, Math.min(100, progress))}%`;
+  }
+}
+
+function waitForFrames(count = 1) {
+  return new Promise((resolve) => {
+    const step = (remaining) => {
+      if (remaining <= 0) {
+        resolve();
+        return;
+      }
+      requestAnimationFrame(() => step(remaining - 1));
+    };
+    step(count);
+  });
 }
 
 function scheduleAutosave() {

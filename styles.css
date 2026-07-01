@@ -1735,3 +1735,107 @@ body.modal-open {
 .chapter-edit-card {
   flex: 0 0 auto;
 }
+
+
+/* v009: アプリ内PDF直接出力 */
+.pdf-export-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(24, 32, 36, 0.58);
+  backdrop-filter: blur(3px);
+}
+
+.pdf-export-overlay[hidden] {
+  display: none;
+}
+
+.pdf-export-card {
+  width: min(380px, 100%);
+  padding: 28px;
+  text-align: center;
+  background: #fff;
+  border: 1px solid #dfe5e8;
+  border-radius: 18px;
+  box-shadow: 0 22px 60px rgba(15, 23, 28, 0.28);
+}
+
+.pdf-export-card strong {
+  display: block;
+  margin-top: 14px;
+  color: #233239;
+  font-size: 17px;
+}
+
+.pdf-export-card p {
+  min-height: 1.5em;
+  margin: 10px 0 14px;
+  color: #53636b;
+  font-size: 12px;
+}
+
+.pdf-export-card small {
+  display: block;
+  margin-top: 12px;
+  color: #7b878d;
+  font-size: 10px;
+  line-height: 1.55;
+}
+
+.pdf-export-spinner {
+  width: 34px;
+  height: 34px;
+  margin: 0 auto;
+  border: 3px solid #dce8e5;
+  border-top-color: #2f796d;
+  border-radius: 50%;
+  animation: pdf-export-spin 0.85s linear infinite;
+}
+
+.pdf-export-progress-track {
+  height: 7px;
+  overflow: hidden;
+  background: #e7eeec;
+  border-radius: 999px;
+}
+
+.pdf-export-progress-track span {
+  display: block;
+  width: 0;
+  height: 100%;
+  background: #2f796d;
+  border-radius: inherit;
+  transition: width 0.16s ease;
+}
+
+.pdf-export-stage {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: -2147483647;
+  overflow: hidden;
+  pointer-events: none;
+  background: #fff;
+}
+
+.pdf-export-stage .pdf-export-paper {
+  box-shadow: none !important;
+  outline: 0 !important;
+}
+
+.pdf-export-stage .page-content::before,
+.pdf-export-stage .body-paragraph::before,
+.pdf-export-stage .body-paragraph::after {
+  display: none !important;
+}
+
+body.pdf-exporting {
+  cursor: progress;
+}
+
+@keyframes pdf-export-spin {
+  to { transform: rotate(360deg); }
+}
