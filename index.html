@@ -4,8 +4,8 @@
 <head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1" name="viewport"/>
-<meta content="出版社向け簡易組版アプリ v011" name="description"/>
-<title>組版アプリ v011</title>
+<meta content="出版社向け簡易組版アプリ v012" name="description"/>
+<title>組版アプリ v012</title>
 <link href="styles.css" rel="stylesheet"/>
 <link rel="icon" href="data:,">
 </head>
@@ -14,7 +14,7 @@
 <header class="topbar">
 <div class="brand-block">
 <strong>組版アプリ</strong>
-<span class="version-badge">v011</span>
+<span class="version-badge">v012</span>
 </div>
 <label class="project-name-wrap">
 <span>プロジェクト名</span>
@@ -28,6 +28,7 @@
 <button class="button secondary" id="templatesBtn" type="button">テンプレート</button>
 <button class="button secondary" id="exportBtn" type="button">JSON出力</button>
 <button class="button secondary" id="importBtn" type="button">JSON読込</button>
+<button class="button check-button" id="manuscriptCheckBtn" type="button">原稿チェック <span class="check-count-badge" id="manuscriptCheckBadge">0</span></button>
 <button class="button primary" id="printBtn" type="button">PDF保存</button>
 <input accept="application/json,.json" hidden="" id="importFile" type="file"/>
 </div>
@@ -54,7 +55,7 @@
       </label>
       <label class="field compact-gap">
         <span>サブタイトル</span>
-        <input id="subtitleInput" placeholder="不要な場合は空欄" type="text" value="日本語組版ルールと直接PDF出力の確認用原稿"/>
+        <input id="subtitleInput" placeholder="不要な場合は空欄" type="text" value="原稿チェックと日本語組版の確認用原稿"/>
       </label>
       <label class="field compact-gap no-margin">
         <span>著者名</span>
@@ -92,9 +93,9 @@
       </div>
       <label class="field body-field full-body-field">
         <span>本文全体</span>
-        <textarea id="bodyInput" placeholder="ここに本文を貼り付けてください。" spellcheck="false"># 第1章　組版アプリv011
+        <textarea id="bodyInput" placeholder="ここに本文を貼り付けてください。" spellcheck="false"># 第1章　組版アプリv012
 
-これは、組版アプリv011の動作確認用原稿です。
+これは、組版アプリv012の動作確認用原稿です。右上の「原稿チェック」から、不要な空白や表記揺れを確認できます。
 
 右側の設定を変更すると、用紙サイズ、余白、フォント、文字サイズ、文字間、行間が中央のプレビューへ自動反映されます。
 
@@ -627,6 +628,51 @@
 </div>
 <p class="helper-text template-note">テンプレートには用紙、余白、本文、日本語組版、見出し、タイトル、目次、ページ設定だけを保存します。原稿内容は含まれません。</p>
 <div class="library-list" id="templateList"></div>
+</section>
+</div>
+
+
+<div class="modal-backdrop" hidden id="manuscriptCheckModal">
+<section aria-labelledby="manuscriptCheckModalTitle" aria-modal="true" class="modal-card check-modal-card" role="dialog">
+<header class="modal-header">
+<div>
+<p class="eyebrow">MANUSCRIPT CHECK</p>
+<h2 id="manuscriptCheckModalTitle">原稿チェック</h2>
+</div>
+<button aria-label="閉じる" class="icon-button" data-close-modal="manuscriptCheckModal" type="button">×</button>
+</header>
+<div class="check-intro-card">
+<div class="check-intro-icon" aria-hidden="true">✓</div>
+<div>
+<strong>原稿を変える前に、確認しながら修正します</strong>
+<p>不要な空白、タブ、表記揺れなどを検出します。自動で勝手に書き換えることはありません。</p>
+</div>
+</div>
+<div class="check-summary-grid" aria-label="チェック結果概要">
+<div class="check-summary-item"><span>検出</span><strong id="manuscriptCheckTotal">0件</strong></div>
+<div class="check-summary-item warning"><span>要確認</span><strong id="manuscriptCheckWarnings">0件</strong></div>
+<div class="check-summary-item fixable"><span>修正可能</span><strong id="manuscriptCheckFixable">0件</strong></div>
+</div>
+<div class="check-toolbar">
+<div class="check-filter-group" role="group" aria-label="表示するチェック結果">
+<button class="check-filter-button active" data-check-filter="all" type="button">すべて</button>
+<button class="check-filter-button" data-check-filter="warning" type="button">要確認</button>
+<button class="check-filter-button" data-check-filter="fixable" type="button">修正可能</button>
+</div>
+<div class="check-toolbar-actions">
+<button class="button modal-secondary" id="rerunManuscriptCheckBtn" type="button">再チェック</button>
+<button class="button modal-primary" id="fixSafeManuscriptIssuesBtn" type="button">安全な項目を一括修正</button>
+</div>
+</div>
+<div class="check-list" id="manuscriptCheckList"></div>
+<div class="check-empty-state" id="manuscriptCheckEmpty" hidden>
+<div aria-hidden="true">✓</div>
+<strong>現在、確認が必要な項目はありません</strong>
+<p>原稿を変更した後は「再チェック」を押してください。</p>
+</div>
+<footer class="check-modal-footer">
+<p id="manuscriptCheckFooterNote">チェック結果を選ぶと、全文編集の該当箇所へ移動します。</p>
+</footer>
 </section>
 </div>
 

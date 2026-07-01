@@ -1912,7 +1912,7 @@ body.pdf-exporting {
 .toc-entry.toc-no-page-number { display: block; }
 
 
-/* v011: Japanese typesetting controls */
+/* v012: Japanese typesetting controls */
 .japanese-typesetting-accordion {
   border-color: #b8cbbf;
 }
@@ -1954,4 +1954,360 @@ body.pdf-exporting {
 
 .line-measure-content {
   overflow: visible;
+}
+
+/* v012: manuscript checker */
+.check-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: #35574d;
+  background: #edf6f2;
+  border-color: #c4dbd1;
+}
+
+.check-button:hover {
+  background: #e2efe9;
+}
+
+.check-button.has-issues {
+  color: #714a16;
+  background: #fff5df;
+  border-color: #e8c98d;
+}
+
+.check-count-badge {
+  display: inline-grid;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  place-items: center;
+  color: #fff;
+  background: #bd6d20;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.check-count-badge.clear {
+  background: #4f8975;
+}
+
+.check-modal-card {
+  width: min(880px, calc(100vw - 32px));
+  max-height: min(88vh, 900px);
+  overflow: hidden;
+}
+
+.check-intro-card {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  padding: 14px 16px;
+  margin-bottom: 14px;
+  background: #f4f8f6;
+  border: 1px solid #d8e5df;
+  border-radius: 12px;
+}
+
+.check-intro-icon {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  color: #fff;
+  background: #4f8975;
+  border-radius: 50%;
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.check-intro-card strong {
+  display: block;
+  color: #29463d;
+  font-size: 14px;
+}
+
+.check-intro-card p {
+  margin: 4px 0 0;
+  color: #66766f;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.check-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.check-summary-item {
+  padding: 11px 13px;
+  background: #f7f9f8;
+  border: 1px solid #e1e7e4;
+  border-radius: 10px;
+}
+
+.check-summary-item span {
+  display: block;
+  margin-bottom: 3px;
+  color: #77827d;
+  font-size: 10px;
+}
+
+.check-summary-item strong {
+  color: #31423b;
+  font-size: 17px;
+}
+
+.check-summary-item.warning {
+  background: #fff8e9;
+  border-color: #eed8aa;
+}
+
+.check-summary-item.warning strong {
+  color: #8a591d;
+}
+
+.check-summary-item.fixable {
+  background: #edf7f2;
+  border-color: #cee4d9;
+}
+
+.check-summary-item.fixable strong {
+  color: #39715e;
+}
+
+.check-toolbar {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 13px;
+  border-bottom: 1px solid #e4e9e7;
+}
+
+.check-filter-group,
+.check-toolbar-actions {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.check-filter-button {
+  padding: 7px 11px;
+  color: #66736d;
+  background: #f5f7f6;
+  border: 1px solid #dce3df;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.check-filter-button.active {
+  color: #fff;
+  background: #4f7467;
+  border-color: #4f7467;
+}
+
+.check-list {
+  display: grid;
+  gap: 10px;
+  min-height: 0;
+  max-height: 48vh;
+  padding: 14px 3px 5px 0;
+  overflow-y: auto;
+}
+
+.check-issue {
+  padding: 13px 14px;
+  background: #fff;
+  border: 1px solid #e0e6e3;
+  border-left: 4px solid #c97b2b;
+  border-radius: 10px;
+}
+
+.check-issue.info {
+  border-left-color: #6b8fa6;
+}
+
+.check-issue-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.check-issue-labels {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.check-category-badge,
+.check-safe-badge,
+.check-location {
+  display: inline-flex;
+  align-items: center;
+  min-height: 21px;
+  padding: 3px 7px;
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.check-category-badge {
+  color: #865516;
+  background: #fff2d9;
+}
+
+.check-location {
+  color: #5d6d66;
+  background: #edf1ef;
+}
+
+.check-safe-badge {
+  color: #2f6b56;
+  background: #e6f3ed;
+}
+
+.check-issue-title {
+  display: block;
+  margin-bottom: 7px;
+  color: #263a32;
+  font-size: 13px;
+}
+
+.check-excerpt {
+  display: block;
+  padding: 8px 10px;
+  overflow: hidden;
+  color: #4a5651;
+  background: #f7f8f7;
+  border: 1px solid #e6e9e7;
+  border-radius: 7px;
+  font-family: "Yu Gothic", "Hiragino Kaku Gothic ProN", sans-serif;
+  font-size: 10px;
+  line-height: 1.5;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.check-issue-message {
+  margin: 7px 0 10px;
+  color: #68756f;
+  font-size: 10px;
+  line-height: 1.65;
+}
+
+.check-issue-actions {
+  display: flex;
+  gap: 7px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.check-empty-state {
+  padding: 38px 20px;
+  text-align: center;
+}
+
+.check-empty-state > div {
+  display: grid;
+  width: 50px;
+  height: 50px;
+  margin: 0 auto 12px;
+  place-items: center;
+  color: #fff;
+  background: #57917d;
+  border-radius: 50%;
+  font-size: 23px;
+}
+
+.check-empty-state strong {
+  display: block;
+  color: #355248;
+  font-size: 14px;
+}
+
+.check-empty-state p,
+.check-filter-empty {
+  color: #78857f;
+  font-size: 11px;
+}
+
+.check-filter-empty {
+  padding: 28px;
+  text-align: center;
+  background: #f7f9f8;
+  border-radius: 10px;
+}
+
+.check-modal-footer {
+  padding-top: 10px;
+  border-top: 1px solid #e5eae7;
+}
+
+.check-modal-footer p {
+  margin: 0;
+  color: #7b8781;
+  font-size: 10px;
+  line-height: 1.55;
+}
+
+.check-focus-flash {
+  animation: check-focus-flash 1.4s ease;
+}
+
+@keyframes check-focus-flash {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(202, 128, 39, 0); }
+  25%, 70% { box-shadow: 0 0 0 4px rgba(202, 128, 39, 0.26); }
+}
+
+@media (max-width: 760px) {
+  .check-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .check-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .check-toolbar-actions {
+    justify-content: stretch;
+  }
+
+  .check-toolbar-actions .button {
+    flex: 1;
+  }
+}
+
+.check-modal-card > .check-intro-card,
+.check-modal-card > .check-summary-grid,
+.check-modal-card > .check-toolbar,
+.check-modal-card > .check-list,
+.check-modal-card > .check-empty-state,
+.check-modal-card > .check-modal-footer {
+  margin-right: 18px;
+  margin-left: 18px;
+}
+
+.check-modal-card > .check-intro-card {
+  margin-top: 16px;
+}
+
+.check-modal-card > .check-list {
+  flex: 1 1 auto;
+}
+
+.check-modal-card > .check-modal-footer {
+  margin-bottom: 14px;
 }

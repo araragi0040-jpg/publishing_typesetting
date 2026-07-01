@@ -1,20 +1,20 @@
 'use strict';
 
-const APP_VERSION = 'v011';
-const SCHEMA_VERSION = 11;
+const APP_VERSION = 'v012';
+const SCHEMA_VERSION = 12;
 const AUTOSAVE_DELAY = 700;
 
-const PROJECT_INDEX_KEY = 'typesetting-app-v011-project-index';
-const PROJECT_PREFIX = 'typesetting-app-v011-project:';
-const CURRENT_PROJECT_KEY = 'typesetting-app-v011-current-project';
-const TEMPLATE_STORAGE_KEY = 'typesetting-app-v011-templates';
+const PROJECT_INDEX_KEY = 'typesetting-app-v012-project-index';
+const PROJECT_PREFIX = 'typesetting-app-v012-project:';
+const CURRENT_PROJECT_KEY = 'typesetting-app-v012-current-project';
+const TEMPLATE_STORAGE_KEY = 'typesetting-app-v012-templates';
 
-const LEGACY_V10_PROJECT_INDEX_KEY = 'typesetting-app-v010-project-index';
-const LEGACY_V10_PROJECT_PREFIX = 'typesetting-app-v010-project:';
-const LEGACY_V10_CURRENT_PROJECT_KEY = 'typesetting-app-v010-current-project';
-const LEGACY_V10_TEMPLATE_STORAGE_KEY = 'typesetting-app-v010-templates';
+const LEGACY_V11_PROJECT_INDEX_KEY = 'typesetting-app-v011-project-index';
+const LEGACY_V11_PROJECT_PREFIX = 'typesetting-app-v011-project:';
+const LEGACY_V11_CURRENT_PROJECT_KEY = 'typesetting-app-v011-current-project';
+const LEGACY_V11_TEMPLATE_STORAGE_KEY = 'typesetting-app-v011-templates';
 const LEGACY_V1_STORAGE_KEY = 'typesetting-app-v001';
-const MIGRATION_MARKER_KEY = 'typesetting-app-v011-migration-complete';
+const MIGRATION_MARKER_KEY = 'typesetting-app-v012-migration-complete';
 
 const DEFAULT_SETTINGS = Object.freeze({
   paperPreset: 'A5',
@@ -95,11 +95,11 @@ const DEFAULT_SETTINGS = Object.freeze({
 
 const SAMPLE_MANUSCRIPT = Object.freeze({
   title: 'サンプルタイトル',
-  subtitle: '日本語組版ルールと直接PDF出力の確認用原稿',
+  subtitle: '原稿チェックと日本語組版の確認用原稿',
   author: '著者名',
-  body: `# 第1章　組版アプリv011
+  body: `# 第1章　組版アプリv012
 
-これは、組版アプリv011の動作確認用原稿です。
+これは、組版アプリv012の動作確認用原稿です。右上の「原稿チェック」から、不要な空白や表記揺れを確認できます。
 
 右側の設定を変更すると、用紙サイズ、余白、フォント、文字サイズ、文字間、行間が中央のプレビューへ自動反映されます。
 
@@ -125,7 +125,7 @@ const SAMPLE_MANUSCRIPT = Object.freeze({
 });
 
 const DEFAULT_STATE = Object.freeze({
-  projectName: '組版アプリ v011 サンプル',
+  projectName: '組版アプリ v012 サンプル',
   manuscript: { ...SAMPLE_MANUSCRIPT, paragraphs: [], chapters: [] },
   paragraphOverrides: {},
   settings: DEFAULT_SETTINGS,
@@ -194,7 +194,11 @@ let manuscriptEditorMode = 'full';
 let chapterModel = [];
 let selectedChapterIndex = -1;
 let isApplyingChapterEdit = false;
-const MANUSCRIPT_MODE_KEY = 'typesetting-app-v011-manuscript-mode';
+let manuscriptIssues = [];
+let manuscriptCheckFilter = 'all';
+let manuscriptCheckTimer = null;
+const MAX_MANUSCRIPT_ISSUES = 300;
+const MANUSCRIPT_MODE_KEY = 'typesetting-app-v012-manuscript-mode';
 
 window.addEventListener('DOMContentLoaded', init);
 
@@ -213,6 +217,7 @@ function init() {
   updateRunningContentControls();
   updateTocControls();
   updateJapaneseTypesettingControls();
+  scheduleManuscriptCheck(0);
   scheduleRender();
   refreshCurrentProjectStatus();
 }
@@ -255,6 +260,10 @@ function cacheElements() {
     'selectedChapterLabel', 'selectedChapterMeta', 'chapterEmptyState', 'chapterControls',
     'chapterTitleInput', 'chapterBodyInput', 'chapterMoveUpBtn', 'chapterMoveDownBtn',
     'duplicateChapterBtn', 'deleteChapterBtn',
+    'manuscriptCheckBtn', 'manuscriptCheckBadge', 'manuscriptCheckModal',
+    'manuscriptCheckTotal', 'manuscriptCheckWarnings', 'manuscriptCheckFixable',
+    'rerunManuscriptCheckBtn', 'fixSafeManuscriptIssuesBtn', 'manuscriptCheckList',
+    'manuscriptCheckEmpty', 'manuscriptCheckFooterNote',
     'pdfExportOverlay', 'pdfExportStatus', 'pdfExportProgress'
   ];
 
@@ -292,6 +301,9 @@ function bindEvents() {
       markDirty();
       scheduleRender();
       scheduleAutosave();
+      if ([els.titleInput, els.subtitleInput, els.authorInput].includes(element)) {
+        scheduleManuscriptCheck();
+      }
     });
   });
 
@@ -305,6 +317,7 @@ function bindEvents() {
     markDirty();
     scheduleRender();
     scheduleAutosave();
+    scheduleManuscriptCheck();
   });
 
   els.manuscriptModeFull.addEventListener('click', () => setManuscriptEditorMode('full'));
@@ -380,6 +393,13 @@ function bindEvents() {
   els.importBtn.addEventListener('click', () => els.importFile.click());
   els.importFile.addEventListener('change', importJson);
   els.printBtn.addEventListener('click', exportPdf);
+  els.manuscriptCheckBtn.addEventListener('click', openManuscriptCheckModal);
+  els.rerunManuscriptCheckBtn.addEventListener('click', () => runManuscriptCheck({ announce: true }));
+  els.fixSafeManuscriptIssuesBtn.addEventListener('click', fixSafeManuscriptIssues);
+  els.manuscriptCheckList.addEventListener('click', handleManuscriptCheckAction);
+  document.querySelectorAll('[data-check-filter]').forEach((button) => {
+    button.addEventListener('click', () => setManuscriptCheckFilter(button.dataset.checkFilter));
+  });
   els.resetSettingsBtn.addEventListener('click', resetSettings);
 
   els.createProjectFromModalBtn.addEventListener('click', () => {
@@ -439,7 +459,7 @@ function loadInitialProject() {
     applyState(migrated);
     saveCurrentProject(false);
     updateSaveStatus('v001データを移行済み');
-    showToast('v001の保存データをv011へ移行しました。');
+    showToast('v001の保存データをv012へ移行しました。');
     return;
   }
 
@@ -459,15 +479,15 @@ function migrateLegacyData() {
     return;
   }
 
-  const legacyIndex = readJsonFromStorage(LEGACY_V10_PROJECT_INDEX_KEY, []);
+  const legacyIndex = readJsonFromStorage(LEGACY_V11_PROJECT_INDEX_KEY, []);
   let migratedCount = 0;
   let mappedCurrentId = null;
-  const legacyCurrentId = safeStorageGet(LEGACY_V10_CURRENT_PROJECT_KEY);
+  const legacyCurrentId = safeStorageGet(LEGACY_V11_CURRENT_PROJECT_KEY);
 
   if (Array.isArray(legacyIndex)) {
     legacyIndex.forEach((item) => {
       if (!item?.id) return;
-      const raw = readJsonFromStorage(`${LEGACY_V10_PROJECT_PREFIX}${item.id}`, null);
+      const raw = readJsonFromStorage(`${LEGACY_V11_PROJECT_PREFIX}${item.id}`, null);
       if (!raw) return;
       const state = normalizeState(raw);
       state.metadata.appVersion = APP_VERSION;
@@ -481,7 +501,7 @@ function migrateLegacyData() {
     });
   }
 
-  const legacyTemplates = readJsonFromStorage(LEGACY_V10_TEMPLATE_STORAGE_KEY, []);
+  const legacyTemplates = readJsonFromStorage(LEGACY_V11_TEMPLATE_STORAGE_KEY, []);
   if (Array.isArray(legacyTemplates) && legacyTemplates.length) {
     safeStorageSet(TEMPLATE_STORAGE_KEY, JSON.stringify(legacyTemplates));
   }
@@ -490,7 +510,7 @@ function migrateLegacyData() {
   safeStorageSet(MIGRATION_MARKER_KEY, 'true');
 
   if (migratedCount > 0) {
-    showToast(`v010のプロジェクト${migratedCount}件をv011へ移行しました。`);
+    showToast(`v011のプロジェクト${migratedCount}件をv012へ移行しました。`);
   }
 }
 
@@ -869,6 +889,529 @@ function applyHeadingToCurrentLines(level) {
 }
 
 
+function scheduleManuscriptCheck(delay = 380) {
+  clearTimeout(manuscriptCheckTimer);
+  manuscriptCheckTimer = setTimeout(() => runManuscriptCheck({ announce: false }), Math.max(0, delay));
+}
+
+function openManuscriptCheckModal() {
+  runManuscriptCheck({ announce: false });
+  openModal('manuscriptCheckModal');
+}
+
+function runManuscriptCheck({ announce = false } = {}) {
+  manuscriptIssues = analyzeManuscript();
+  updateManuscriptCheckBadge();
+  renderManuscriptCheckResults();
+  if (announce) {
+    showToast(manuscriptIssues.length
+      ? `${manuscriptIssues.length}件の確認項目が見つかりました。`
+      : '確認が必要な項目は見つかりませんでした。');
+  }
+  return manuscriptIssues;
+}
+
+function getManuscriptCheckFields() {
+  return [
+    { key: 'title', label: 'タイトル', element: els.titleInput, value: String(els.titleInput?.value || '') },
+    { key: 'subtitle', label: 'サブタイトル', element: els.subtitleInput, value: String(els.subtitleInput?.value || '') },
+    { key: 'author', label: '著者名', element: els.authorInput, value: String(els.authorInput?.value || '') },
+    { key: 'body', label: '本文', element: els.bodyInput, value: String(els.bodyInput?.value || '') }
+  ];
+}
+
+function analyzeManuscript() {
+  const issues = [];
+  let serial = 0;
+
+  const addIssue = (field, data) => {
+    if (issues.length >= MAX_MANUSCRIPT_ISSUES) return;
+    const start = Math.max(0, Number(data.start) || 0);
+    const end = Math.max(start, Number.isFinite(data.end) ? data.end : start);
+    const original = typeof data.original === 'string'
+      ? data.original
+      : field.value.slice(start, end);
+    issues.push({
+      id: `check-${serial += 1}`,
+      fieldKey: field.key,
+      fieldLabel: field.label,
+      start,
+      end,
+      original,
+      replacement: typeof data.replacement === 'string' ? data.replacement : null,
+      safe: Boolean(data.safe),
+      severity: data.severity === 'info' ? 'info' : 'warning',
+      category: data.category || '表記確認',
+      title: data.title || '確認項目',
+      message: data.message || '',
+      line: field.key === 'body' ? lineNumberAt(field.value, start) : null,
+      excerpt: createCheckExcerpt(field.value, start, end)
+    });
+  };
+
+  getManuscriptCheckFields().forEach((field) => {
+    const value = field.value;
+    if (!value) return;
+
+    scanRegex(value, /\t+/g, (match) => addIssue(field, {
+      start: match.index,
+      end: match.index + match[0].length,
+      replacement: '',
+      safe: true,
+      category: '不要文字',
+      title: 'タブ文字があります',
+      message: 'タブは環境によって幅が変わります。組版設定の字下げや余白を使用してください。'
+    }));
+
+    scanRegex(value, /[\u00A0\u2007\u202F]+/g, (match) => addIssue(field, {
+      start: match.index,
+      end: match.index + match[0].length,
+      replacement: ' ',
+      safe: true,
+      category: '不要文字',
+      title: '特殊な空白があります',
+      message: 'コピー元に由来する特殊空白です。通常の半角スペースへ置き換えられます。'
+    }));
+
+    scanRegex(value, /[\u200B-\u200D\uFEFF]+/g, (match) => addIssue(field, {
+      start: match.index,
+      end: match.index + match[0].length,
+      replacement: '',
+      safe: true,
+      category: '不要文字',
+      title: '見えない制御文字があります',
+      message: '表示されない文字が混ざっています。削除しても見た目は変わりません。'
+    }));
+
+    scanRegex(value, /[ \u3000]+(?=\n|$)/g, (match) => addIssue(field, {
+      start: match.index,
+      end: match.index + match[0].length,
+      replacement: '',
+      safe: true,
+      category: '空白',
+      title: '行末に空白があります',
+      message: '行末の空白は誌面に不要なため削除できます。'
+    }));
+
+    scanRegex(value, /[Ａ-Ｚａ-ｚ０-９]+/g, (match) => addIssue(field, {
+      start: match.index,
+      end: match.index + match[0].length,
+      replacement: toHalfWidthAlphaNumeric(match[0]),
+      safe: false,
+      severity: 'info',
+      category: '全角・半角',
+      title: '全角英数字があります',
+      message: '英数字を半角へ統一する場合に修正してください。出版社の表記ルールによっては、そのままで問題ありません。'
+    }));
+
+    scanRegex(value, /…+/g, (match) => {
+      if (match[0].length % 2 === 0) return;
+      addIssue(field, {
+        start: match.index,
+        end: match.index + match[0].length,
+        replacement: `${match[0]}…`,
+        safe: false,
+        category: '約物',
+        title: '三点リーダーが奇数個です',
+        message: '出版物では「……」のように偶数個で使用することが一般的です。'
+      });
+    });
+
+    scanRegex(value, /\.{3,}/g, (match) => addIssue(field, {
+      start: match.index,
+      end: match.index + match[0].length,
+      replacement: '……',
+      safe: false,
+      category: '約物',
+      title: 'ピリオドで三点リーダーが入力されています',
+      message: '日本語本文の三点リーダーへ統一する場合は「……」へ置き換えます。'
+    }));
+
+    scanRegex(value, /・{3,}/g, (match) => addIssue(field, {
+      start: match.index,
+      end: match.index + match[0].length,
+      replacement: '……',
+      safe: false,
+      category: '約物',
+      title: '中黒が連続しています',
+      message: '三点リーダーとして使用している場合は「……」へ置き換えます。'
+    }));
+
+    scanRegex(value, /―+/g, (match) => {
+      if (match[0].length % 2 === 0) return;
+      addIssue(field, {
+        start: match.index,
+        end: match.index + match[0].length,
+        replacement: `${match[0]}―`,
+        safe: false,
+        category: '約物',
+        title: 'ダッシュが奇数本です',
+        message: '出版物では「――」のように2本単位で使用することが一般的です。'
+      });
+    });
+
+    scanRegex(value, /(?:--+|—+)/g, (match) => addIssue(field, {
+      start: match.index,
+      end: match.index + match[0].length,
+      replacement: '――',
+      safe: false,
+      category: '約物',
+      title: 'ダッシュの種類を確認してください',
+      message: '日本語本文のダッシュへ統一する場合は「――」へ置き換えます。'
+    }));
+
+    scanRegex(value, /([。、])\1+/g, (match) => addIssue(field, {
+      start: match.index,
+      end: match.index + match[0].length,
+      replacement: match[1],
+      safe: false,
+      category: '句読点',
+      title: '同じ句読点が連続しています',
+      message: '意図した表現でなければ、1文字へ修正してください。'
+    }));
+
+    if (field.key === 'body') {
+      scanRegex(value, /^(#{1,3})(?!#)(\S)/gm, (match) => addIssue(field, {
+        start: match.index,
+        end: match.index + match[0].length,
+        replacement: `${match[1]} ${match[2]}`,
+        safe: true,
+        category: '見出し',
+        title: '見出し記号の後に空白がありません',
+        message: '見出しとして認識するため、#の後に半角スペースを追加します。'
+      }));
+
+      scanRegex(value, /^#{1,3}[ \u3000]*$/gm, (match) => addIssue(field, {
+        start: match.index,
+        end: match.index + match[0].length,
+        replacement: null,
+        safe: false,
+        category: '見出し',
+        title: 'タイトルのない見出しがあります',
+        message: '見出し名を入力するか、この行を削除してください。'
+      }));
+
+      scanRegex(value, /^[ \u3000]+(?=\S)/gm, (match) => addIssue(field, {
+        start: match.index,
+        end: match.index + match[0].length,
+        replacement: '',
+        safe: false,
+        category: '字下げ',
+        title: '行頭に手入力の空白があります',
+        message: '段落字下げは組版設定で制御できます。詩・引用など意図的な空白の場合はそのままにしてください。'
+      }));
+
+      scanRegex(value, / {2,}/g, (match) => {
+        const before = value[match.index - 1] || '\n';
+        const after = value[match.index + match[0].length] || '\n';
+        if (before === '\n' || after === '\n') return;
+        addIssue(field, {
+          start: match.index,
+          end: match.index + match[0].length,
+          replacement: ' ',
+          safe: false,
+          category: '空白',
+          title: '半角スペースが連続しています',
+          message: '語間の空白であれば1文字へ統一できます。位置合わせに使用している場合は組版設定を使用してください。'
+        });
+      });
+
+      scanRegex(value, /\n(?:[ \u3000]*\n){3,}/g, (match) => addIssue(field, {
+        start: match.index,
+        end: match.index + match[0].length,
+        replacement: '\n\n',
+        safe: false,
+        severity: 'info',
+        category: '改行',
+        title: '空行が3行以上続いています',
+        message: '意図した章間の空きでなければ、空行1行へ整理できます。'
+      }));
+    }
+
+    scanUnmatchedBrackets(field, addIssue);
+  });
+
+  return issues;
+}
+
+function scanRegex(value, regex, callback) {
+  regex.lastIndex = 0;
+  let match;
+  while ((match = regex.exec(value)) !== null) {
+    callback(match);
+    if (!match[0].length) regex.lastIndex += 1;
+  }
+}
+
+function scanUnmatchedBrackets(field, addIssue) {
+  const pairs = [
+    ['「', '」'], ['『', '』'], ['（', '）'], ['【', '】'], ['［', '］'], ['(', ')'], ['[', ']']
+  ];
+  pairs.forEach(([openChar, closeChar]) => {
+    const stack = [];
+    for (let index = 0; index < field.value.length; index += 1) {
+      const char = field.value[index];
+      if (char === openChar) {
+        stack.push(index);
+      } else if (char === closeChar) {
+        if (stack.length) {
+          stack.pop();
+        } else {
+          addIssue(field, {
+            start: index,
+            end: index + 1,
+            replacement: null,
+            safe: false,
+            category: '括弧',
+            title: `対応する「${openChar}」が見つかりません`,
+            message: `閉じ括弧「${closeChar}」に対応する開き括弧を確認してください。`
+          });
+        }
+      }
+    }
+    stack.forEach((index) => addIssue(field, {
+      start: index,
+      end: index + 1,
+      replacement: null,
+      safe: false,
+      category: '括弧',
+      title: `対応する「${closeChar}」が見つかりません`,
+      message: `開き括弧「${openChar}」に対応する閉じ括弧を確認してください。`
+    }));
+  });
+}
+
+function lineNumberAt(value, index) {
+  return value.slice(0, Math.max(0, index)).split('\n').length;
+}
+
+function createCheckExcerpt(value, start, end) {
+  const lineStart = value.lastIndexOf('\n', Math.max(0, start - 1)) + 1;
+  const nextBreak = value.indexOf('\n', end);
+  const lineEnd = nextBreak === -1 ? value.length : nextBreak;
+  const line = value.slice(lineStart, lineEnd).replace(/\t/g, '⇥');
+  const compact = line.length > 72 ? `${line.slice(0, 69)}…` : line;
+  return compact || '（空の行）';
+}
+
+function toHalfWidthAlphaNumeric(value) {
+  return value.replace(/[Ａ-Ｚａ-ｚ０-９]/g, (char) => String.fromCharCode(char.charCodeAt(0) - 0xFEE0));
+}
+
+function updateManuscriptCheckBadge() {
+  if (!els.manuscriptCheckBadge || !els.manuscriptCheckBtn) return;
+  const count = manuscriptIssues.length;
+  els.manuscriptCheckBadge.textContent = count > 99 ? '99+' : String(count);
+  els.manuscriptCheckBadge.classList.toggle('clear', count === 0);
+  els.manuscriptCheckBtn.classList.toggle('has-issues', count > 0);
+  els.manuscriptCheckBtn.title = count
+    ? `${count}件の確認項目があります`
+    : '現在、確認が必要な項目はありません';
+}
+
+function setManuscriptCheckFilter(filter) {
+  manuscriptCheckFilter = ['all', 'warning', 'fixable'].includes(filter) ? filter : 'all';
+  document.querySelectorAll('[data-check-filter]').forEach((button) => {
+    const active = button.dataset.checkFilter === manuscriptCheckFilter;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-pressed', String(active));
+  });
+  renderManuscriptCheckResults();
+}
+
+function getFilteredManuscriptIssues() {
+  if (manuscriptCheckFilter === 'warning') {
+    return manuscriptIssues.filter((issue) => issue.severity === 'warning');
+  }
+  if (manuscriptCheckFilter === 'fixable') {
+    return manuscriptIssues.filter((issue) => typeof issue.replacement === 'string');
+  }
+  return manuscriptIssues;
+}
+
+function renderManuscriptCheckResults() {
+  if (!els.manuscriptCheckList) return;
+  const warningCount = manuscriptIssues.filter((issue) => issue.severity === 'warning').length;
+  const fixableCount = manuscriptIssues.filter((issue) => typeof issue.replacement === 'string').length;
+  const safeCount = manuscriptIssues.filter((issue) => issue.safe && typeof issue.replacement === 'string').length;
+
+  els.manuscriptCheckTotal.textContent = `${manuscriptIssues.length}件`;
+  els.manuscriptCheckWarnings.textContent = `${warningCount}件`;
+  els.manuscriptCheckFixable.textContent = `${fixableCount}件`;
+  els.fixSafeManuscriptIssuesBtn.disabled = safeCount === 0;
+  els.fixSafeManuscriptIssuesBtn.textContent = safeCount
+    ? `安全な項目を一括修正（${safeCount}件）`
+    : '安全な項目を一括修正';
+
+  const filtered = getFilteredManuscriptIssues();
+  els.manuscriptCheckList.replaceChildren();
+  els.manuscriptCheckEmpty.hidden = manuscriptIssues.length !== 0;
+
+  if (!manuscriptIssues.length) {
+    els.manuscriptCheckList.hidden = true;
+  } else {
+    els.manuscriptCheckList.hidden = false;
+  }
+
+  if (manuscriptIssues.length && !filtered.length) {
+    const empty = document.createElement('div');
+    empty.className = 'check-filter-empty';
+    empty.textContent = 'この条件に該当する項目はありません。';
+    els.manuscriptCheckList.appendChild(empty);
+  }
+
+  filtered.forEach((issue) => {
+    const row = document.createElement('article');
+    row.className = `check-issue ${issue.severity}`;
+
+    const top = document.createElement('div');
+    top.className = 'check-issue-top';
+    const labels = document.createElement('div');
+    labels.className = 'check-issue-labels';
+    const category = document.createElement('span');
+    category.className = 'check-category-badge';
+    category.textContent = issue.category;
+    const location = document.createElement('span');
+    location.className = 'check-location';
+    location.textContent = issue.line ? `${issue.fieldLabel}・${issue.line}行目` : issue.fieldLabel;
+    labels.append(category, location);
+    if (issue.safe) {
+      const safe = document.createElement('span');
+      safe.className = 'check-safe-badge';
+      safe.textContent = '安全に一括修正可';
+      labels.appendChild(safe);
+    }
+    top.appendChild(labels);
+
+    const title = document.createElement('strong');
+    title.className = 'check-issue-title';
+    title.textContent = issue.title;
+    const excerpt = document.createElement('code');
+    excerpt.className = 'check-excerpt';
+    excerpt.textContent = issue.excerpt;
+    const message = document.createElement('p');
+    message.className = 'check-issue-message';
+    message.textContent = issue.message;
+
+    const actions = document.createElement('div');
+    actions.className = 'check-issue-actions';
+    const locateButton = document.createElement('button');
+    locateButton.type = 'button';
+    locateButton.className = 'button modal-secondary small';
+    locateButton.dataset.checkAction = 'locate';
+    locateButton.dataset.issueId = issue.id;
+    locateButton.textContent = '該当箇所を確認';
+    actions.appendChild(locateButton);
+
+    if (typeof issue.replacement === 'string') {
+      const fixButton = document.createElement('button');
+      fixButton.type = 'button';
+      fixButton.className = 'button modal-primary small';
+      fixButton.dataset.checkAction = 'fix';
+      fixButton.dataset.issueId = issue.id;
+      fixButton.textContent = 'この項目を修正';
+      actions.appendChild(fixButton);
+    }
+
+    row.append(top, title, excerpt, message, actions);
+    els.manuscriptCheckList.appendChild(row);
+  });
+
+  els.manuscriptCheckFooterNote.textContent = manuscriptIssues.length >= MAX_MANUSCRIPT_ISSUES
+    ? `表示上限の${MAX_MANUSCRIPT_ISSUES}件に達しました。修正後に再チェックしてください。`
+    : '「該当箇所を確認」を押すと、全文編集の対象位置へ移動します。原稿は自動で書き換えません。';
+}
+
+function handleManuscriptCheckAction(event) {
+  const button = event.target.closest('[data-check-action][data-issue-id]');
+  if (!button) return;
+  const issue = manuscriptIssues.find((item) => item.id === button.dataset.issueId);
+  if (!issue) {
+    runManuscriptCheck({ announce: false });
+    return;
+  }
+  if (button.dataset.checkAction === 'locate') {
+    locateManuscriptIssue(issue);
+  } else if (button.dataset.checkAction === 'fix') {
+    fixManuscriptIssue(issue);
+  }
+}
+
+function getCheckFieldElement(fieldKey) {
+  return {
+    title: els.titleInput,
+    subtitle: els.subtitleInput,
+    author: els.authorInput,
+    body: els.bodyInput
+  }[fieldKey] || null;
+}
+
+function locateManuscriptIssue(issue) {
+  const element = getCheckFieldElement(issue.fieldKey);
+  if (!element) return;
+  if (issue.fieldKey === 'body') setManuscriptEditorMode('full');
+  closeModal('manuscriptCheckModal');
+  requestAnimationFrame(() => {
+    element.focus();
+    if (typeof element.setSelectionRange === 'function') {
+      element.setSelectionRange(issue.start, Math.max(issue.start + 1, issue.end));
+    }
+    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    element.classList.remove('check-focus-flash');
+    void element.offsetWidth;
+    element.classList.add('check-focus-flash');
+    setTimeout(() => element.classList.remove('check-focus-flash'), 1500);
+  });
+}
+
+function fixManuscriptIssue(issue) {
+  if (typeof issue.replacement !== 'string') return;
+  const element = getCheckFieldElement(issue.fieldKey);
+  if (!element) return;
+  const current = String(element.value || '');
+  if (current.slice(issue.start, issue.end) !== issue.original) {
+    runManuscriptCheck({ announce: false });
+    showToast('原稿が更新されていたため、チェック結果を更新しました。');
+    return;
+  }
+  element.value = current.slice(0, issue.start) + issue.replacement + current.slice(issue.end);
+  element.dispatchEvent(new Event('input', { bubbles: true }));
+  runManuscriptCheck({ announce: false });
+  showToast('選択した項目を修正しました。');
+}
+
+function fixSafeManuscriptIssues() {
+  const safeIssues = manuscriptIssues.filter((issue) => issue.safe && typeof issue.replacement === 'string');
+  if (!safeIssues.length) return;
+  if (!window.confirm(`安全に修正できる${safeIssues.length}件を一括修正しますか？\nタブ・見えない文字・行末空白などが対象です。`)) return;
+
+  const byField = new Map();
+  safeIssues.forEach((issue) => {
+    if (!byField.has(issue.fieldKey)) byField.set(issue.fieldKey, []);
+    byField.get(issue.fieldKey).push(issue);
+  });
+
+  let fixedCount = 0;
+  byField.forEach((issues, fieldKey) => {
+    const element = getCheckFieldElement(fieldKey);
+    if (!element) return;
+    let value = String(element.value || '');
+    issues.sort((a, b) => b.start - a.start).forEach((issue) => {
+      if (value.slice(issue.start, issue.end) !== issue.original) return;
+      value = value.slice(0, issue.start) + issue.replacement + value.slice(issue.end);
+      fixedCount += 1;
+    });
+    if (value !== element.value) {
+      element.value = value;
+      element.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+  });
+
+  runManuscriptCheck({ announce: false });
+  showToast(`${fixedCount}件を一括修正しました。`);
+}
+
+
 function updateBlankLineControls() {
   if (!els.blankLineScale || !els.preserveBlankLines) return;
   els.blankLineScale.disabled = !els.preserveBlankLines.checked;
@@ -892,11 +1435,11 @@ function saveSettingsAccordionState() {
     const key = details.id || `section-${index}`;
     state[key] = details.open;
   });
-  safeStorageSet('typesetting-app-v011-settings-ui', JSON.stringify(state));
+  safeStorageSet('typesetting-app-v012-settings-ui', JSON.stringify(state));
 }
 
 function restoreSettingsAccordions() {
-  const state = readJsonFromStorage('typesetting-app-v011-settings-ui', null);
+  const state = readJsonFromStorage('typesetting-app-v012-settings-ui', null);
   if (!state || typeof state !== 'object') return;
   document.querySelectorAll('.settings-accordion').forEach((details, index) => {
     const key = details.id || `section-${index}`;
