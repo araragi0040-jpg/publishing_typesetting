@@ -2956,3 +2956,78 @@ html, body { min-width: 960px; }
   .top-save-status { min-width:auto; }
   #topSaveStatusText { display:none; }
 }
+
+/* v019: 編集効率化 */
+.history-button { min-width: 74px; }
+.history-button:disabled { opacity: .42; cursor: not-allowed; }
+.editing-tools-button { border-color: #8faea2; background: #f2f8f5; color: #315f50; }
+
+.page-quick-nav { display:flex; align-items:flex-end; gap:5px; padding:3px 5px; border:1px solid var(--panel-border); border-radius:10px; background:#fff; }
+.page-quick-nav label { display:flex; align-items:center; gap:4px; color:#718078; font-size:9px; }
+.page-quick-nav input { width:48px; min-height:30px; padding:4px 6px; border:1px solid #d6dfda; border-radius:7px; text-align:center; font:inherit; }
+.page-quick-nav small { white-space:nowrap; font-size:9px; color:#8a948f; }
+.page-jump-highlight { outline:3px solid rgba(61,132,104,.48); outline-offset:4px; transition:outline-color .25s ease; }
+.search-target-highlight { outline:3px solid rgba(224,166,66,.52) !important; outline-offset:3px; border-radius:6px; }
+
+.editing-tools-modal-card { width:min(980px,calc(100vw - 32px)); height:min(90vh,900px); max-height:min(90vh,900px); overflow:hidden; display:flex; flex-direction:column; }
+.editing-tools-scroll { flex:1; min-height:0; overflow:auto; padding:16px 20px 22px; display:grid; gap:15px; background:#f5f7f6; }
+.editing-tool-section { padding:16px; border:1px solid #dce4e0; border-radius:15px; background:#fff; box-shadow:0 3px 12px rgba(37,55,48,.035); }
+.editing-tool-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:13px; }
+.editing-tool-heading strong { display:block; color:#31483f; font-size:14px; }
+.editing-tool-heading span:not(.tool-shortcut) { display:block; margin-top:3px; color:#7a8781; font-size:10px; }
+.tool-shortcut { flex:0 0 auto; padding:5px 8px; border-radius:999px; background:#edf3f0; color:#62736b; font-size:9px; }
+.search-control-grid { display:grid; grid-template-columns:minmax(180px,1.4fr) minmax(180px,1.4fr) minmax(125px,.7fr); gap:10px; align-items:end; }
+.search-option-row { min-height:38px; margin:0; align-self:end; }
+.editing-tool-actions { display:flex; flex-wrap:wrap; gap:7px; margin-top:11px; }
+.search-result-summary { margin-top:11px; padding:9px 11px; border-radius:9px; background:#f1f5f3; color:#637069; font-size:10px; }
+.search-results-list { display:grid; gap:6px; max-height:235px; margin-top:8px; overflow:auto; }
+.search-result-row { width:100%; display:grid; gap:3px; padding:9px 11px; border:1px solid #e0e6e3; border-radius:9px; background:#fff; text-align:left; cursor:pointer; }
+.search-result-row:hover,.search-result-row.current { border-color:#78a08f; background:#f2f8f5; }
+.search-result-meta { color:#78857f; font-size:9px; }
+.search-result-row strong { overflow:hidden; color:#35483f; font-size:10px; font-weight:600; text-overflow:ellipsis; white-space:nowrap; }
+.search-result-limit-note { margin:4px 0 0; color:#87918d; font-size:9px; }
+
+.page-jump-card { display:flex; align-items:end; gap:8px; padding:11px; border:1px solid #e0e6e3; border-radius:11px; background:#f8faf9; }
+.page-jump-card label { display:grid; gap:4px; color:#65736c; font-size:9px; }
+.page-jump-card input { width:78px; min-height:35px; border:1px solid #d6dfda; border-radius:8px; padding:5px 8px; }
+.page-jump-card > span { align-self:center; color:#718078; font-size:10px; }
+.heading-navigation-header { display:flex; justify-content:space-between; gap:8px; margin:14px 0 7px; color:#5c6c64; font-size:10px; }
+.heading-navigation-list { display:grid; gap:6px; max-height:280px; overflow:auto; }
+.heading-navigation-row { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:9px 10px; border:1px solid #e1e7e4; border-radius:10px; background:#fff; }
+.heading-navigation-row > div:first-child { min-width:0; display:flex; align-items:center; gap:7px; }
+.heading-navigation-row.level-2 { margin-left:17px; }
+.heading-navigation-row.level-3 { margin-left:34px; }
+.heading-level-badge { flex:0 0 auto; display:grid; place-items:center; width:23px; height:23px; border-radius:7px; background:#e9f2ed; color:#3e705c; font-size:9px; font-weight:700; }
+.heading-navigation-row strong { overflow:hidden; color:#34483f; font-size:10px; text-overflow:ellipsis; white-space:nowrap; }
+.heading-page-label { flex:0 0 auto; color:#87918d; font-size:9px; }
+.heading-navigation-actions { flex:0 0 auto; display:flex; gap:5px; }
+.heading-navigation-actions .button { min-height:30px; padding:5px 8px; font-size:9px; }
+.heading-navigation-empty { display:grid; gap:4px; padding:18px; border:1px dashed #ced9d4; border-radius:10px; text-align:center; }
+.heading-navigation-empty strong { color:#56675f; font-size:11px; }
+.heading-navigation-empty span { color:#87918d; font-size:9px; }
+
+.pdf-range-controls { display:flex; flex-wrap:wrap; align-items:stretch; gap:8px; }
+.pdf-range-controls .radio-card { flex:1 1 170px; min-height:66px; }
+.pdf-range-inputs { flex:1 1 260px; display:flex; align-items:end; justify-content:center; gap:8px; padding:9px 11px; border:1px solid #dce4e0; border-radius:11px; background:#f8faf9; }
+.pdf-range-inputs[hidden] { display:none; }
+.pdf-range-inputs .field { flex:1; margin:0; }
+.pdf-range-inputs > span { padding-bottom:9px; color:#718078; }
+.pdf-range-summary { margin:10px 0; color:#68766f; font-size:10px; }
+.editing-tools-footer { flex:0 0 auto; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 18px; border-top:1px solid var(--panel-border); background:#fff; }
+.editing-tools-footer span { color:#7a8580; font-size:9px; }
+
+@media (max-width: 900px) {
+  .search-control-grid { grid-template-columns:1fr 1fr; }
+  .editing-tools-modal-card { width:calc(100vw - 16px); height:calc(100vh - 16px); max-height:calc(100vh - 16px); }
+}
+@media (max-width: 620px) {
+  .history-button { min-width:auto; padding-inline:8px; }
+  .search-control-grid { grid-template-columns:1fr; }
+  .page-jump-card { flex-wrap:wrap; }
+  .heading-navigation-row { align-items:flex-start; flex-direction:column; }
+  .heading-navigation-actions { width:100%; }
+  .heading-navigation-actions .button { flex:1; }
+  .editing-tools-footer { align-items:stretch; flex-direction:column; }
+  .editing-tools-footer .button { width:100%; }
+  .page-quick-nav { display:none; }
+}

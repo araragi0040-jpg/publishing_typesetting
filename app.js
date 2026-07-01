@@ -1,24 +1,24 @@
 'use strict';
 
-const APP_VERSION = 'v018';
-const SCHEMA_VERSION = 18;
+const APP_VERSION = 'v019';
+const SCHEMA_VERSION = 19;
 const AUTOSAVE_DELAY = 700;
 const MAX_MEDIA_ASSETS = 20;
 const MAX_MEDIA_DATA_CHARS = 3_200_000;
 const MAX_MEDIA_SOURCE_BYTES = 12 * 1024 * 1024;
 const MEDIA_MARKER_PATTERN = /^\s*\[\[figure:([a-zA-Z0-9_-]+)\]\]\s*$/;
 
-const PROJECT_INDEX_KEY = 'typesetting-app-v018-project-index';
-const PROJECT_PREFIX = 'typesetting-app-v018-project:';
-const CURRENT_PROJECT_KEY = 'typesetting-app-v018-current-project';
-const TEMPLATE_STORAGE_KEY = 'typesetting-app-v018-templates';
+const PROJECT_INDEX_KEY = 'typesetting-app-v019-project-index';
+const PROJECT_PREFIX = 'typesetting-app-v019-project:';
+const CURRENT_PROJECT_KEY = 'typesetting-app-v019-current-project';
+const TEMPLATE_STORAGE_KEY = 'typesetting-app-v019-templates';
 
-const LEGACY_V17_PROJECT_INDEX_KEY = 'typesetting-app-v017-project-index';
-const LEGACY_V17_PROJECT_PREFIX = 'typesetting-app-v017-project:';
-const LEGACY_V17_CURRENT_PROJECT_KEY = 'typesetting-app-v017-current-project';
-const LEGACY_V17_TEMPLATE_STORAGE_KEY = 'typesetting-app-v017-templates';
+const LEGACY_V18_PROJECT_INDEX_KEY = 'typesetting-app-v018-project-index';
+const LEGACY_V18_PROJECT_PREFIX = 'typesetting-app-v018-project:';
+const LEGACY_V18_CURRENT_PROJECT_KEY = 'typesetting-app-v018-current-project';
+const LEGACY_V18_TEMPLATE_STORAGE_KEY = 'typesetting-app-v018-templates';
 const LEGACY_V1_STORAGE_KEY = 'typesetting-app-v001';
-const MIGRATION_MARKER_KEY = 'typesetting-app-v018-migration-complete';
+const MIGRATION_MARKER_KEY = 'typesetting-app-v019-migration-complete';
 const WELCOME_SEEN_KEY = 'typesetting-app-v018-welcome-seen';
 
 const DEFAULT_SETTINGS = Object.freeze({
@@ -106,9 +106,9 @@ const SAMPLE_MANUSCRIPT = Object.freeze({
   title: 'サンプルタイトル',
   subtitle: '出力前チェック対応の確認用原稿',
   author: '著者名',
-  body: `# 第1章　組版アプリv018
+  body: `# 第1章　組版アプリv019
 
-これは、組版アプリv018の動作確認用原稿です。用紙設定から「縦書き・右綴じ」へ切り替えると、同じ原稿を縦書きで確認できます。
+これは、組版アプリv019の動作確認用原稿です。用紙設定から「縦書き・右綴じ」へ切り替えると、同じ原稿を縦書きで確認できます。
 
 文字を選択して、**太字**、《《傍点》》、｜組版《くみはん》、__下線__を設定できます。記号はプレビューやPDFには表示されません。
 
@@ -146,7 +146,7 @@ const DEFAULT_BOOK_MATTER = Object.freeze({
 });
 
 const DEFAULT_STATE = Object.freeze({
-  projectName: '組版アプリ v018 サンプル',
+  projectName: '組版アプリ v019 サンプル',
   manuscript: { ...SAMPLE_MANUSCRIPT, paragraphs: [], chapters: [], media: [], matter: deepClone(DEFAULT_BOOK_MATTER) },
   paragraphOverrides: {},
   settings: DEFAULT_SETTINGS,
@@ -238,8 +238,22 @@ let selectedMediaId = null;
 let preflightIssues = [];
 let preflightFilter = 'all';
 let preflightTimer = null;
+let currentPreviewPage = 1;
+let previewScrollTimer = null;
+let searchResults = [];
+let currentSearchResultIndex = -1;
+let editHistory = [];
+let redoHistory = [];
+let historyCaptureTimer = null;
+let historyResetTimer = null;
+let isRestoringHistory = false;
+let historyReady = false;
+let lastHistorySignature = '';
+const historyMediaData = new Map();
+const HISTORY_LIMIT = 40;
 const MAX_MANUSCRIPT_ISSUES = 300;
-const MANUSCRIPT_MODE_KEY = 'typesetting-app-v018-manuscript-mode';
+const MANUSCRIPT_MODE_KEY = 'typesetting-app-v019-manuscript-mode';
+const LEGACY_MANUSCRIPT_MODE_KEY = 'typesetting-app-v018-manuscript-mode';
 
 window.addEventListener('DOMContentLoaded', init);
 
@@ -266,6 +280,8 @@ function init() {
   scheduleRender();
   refreshCurrentProjectStatus();
   updateWorkflowGuide();
+  updateHistoryButtons();
+  setTimeout(resetEditHistory, 120);
   setTimeout(maybeOpenWelcome, 260);
 }
 
@@ -329,7 +345,13 @@ function cacheElements() {
     'preflightErrors', 'preflightWarnings', 'preflightInfo', 'preflightPages',
     'rerunPreflightBtn', 'preflightList', 'preflightEmpty', 'preflightFooterNote',
     'preflightPdfBtn',
-    'topSaveStatus', 'topSaveStatusText', 'toolbarMore',
+    'topSaveStatus', 'topSaveStatusText', 'toolbarMore', 'undoBtn', 'redoBtn', 'editingToolsBtn',
+    'previousPageBtn', 'nextPageBtn', 'currentPageInput', 'totalPageQuick',
+    'editingToolsModal', 'searchTextInput', 'replaceTextInput', 'searchScope', 'searchCaseSensitive',
+    'runSearchBtn', 'previousSearchResultBtn', 'nextSearchResultBtn', 'replaceCurrentBtn', 'replaceAllBtn',
+    'searchResultSummary', 'searchResultsList', 'toolPreviousPageBtn', 'toolNextPageBtn', 'toolPageInput',
+    'toolPageTotal', 'jumpPageBtn', 'headingNavigationSummary', 'headingNavigationList',
+    'pdfRangeInputs', 'pdfRangeFrom', 'pdfRangeTo', 'pdfRangeSummary', 'saveRangePdfBtn',
     'workflowManuscript', 'workflowLayout', 'workflowStructure', 'workflowOutput',
     'workflowManuscriptState', 'workflowLayoutState', 'workflowStructureState', 'workflowOutputState',
     'guideBtn', 'welcomeModal', 'welcomeNewBtn', 'welcomeImportBtn', 'welcomeSampleBtn',
@@ -498,6 +520,29 @@ function bindEvents() {
   els.importBtn.addEventListener('click', () => els.importFile.click());
   els.importFile.addEventListener('change', importJson);
   els.printBtn.addEventListener('click', handlePdfSaveRequest);
+  els.undoBtn.addEventListener('click', undoEditHistory);
+  els.redoBtn.addEventListener('click', redoEditHistory);
+  els.editingToolsBtn.addEventListener('click', openEditingToolsModal);
+  els.previousPageBtn.addEventListener('click', () => jumpToPage(currentPreviewPage - 1));
+  els.nextPageBtn.addEventListener('click', () => jumpToPage(currentPreviewPage + 1));
+  els.currentPageInput.addEventListener('change', () => jumpToPage(els.currentPageInput.value));
+  els.currentPageInput.addEventListener('keydown', (event) => { if (event.key === 'Enter') jumpToPage(els.currentPageInput.value); });
+  els.previewViewport.addEventListener('scroll', handlePreviewScroll, { passive: true });
+  els.runSearchBtn.addEventListener('click', runEditingSearch);
+  els.searchTextInput.addEventListener('keydown', (event) => { if (event.key === 'Enter') { event.preventDefault(); runEditingSearch(); } });
+  els.previousSearchResultBtn.addEventListener('click', () => navigateSearchResult(-1));
+  els.nextSearchResultBtn.addEventListener('click', () => navigateSearchResult(1));
+  els.replaceCurrentBtn.addEventListener('click', replaceCurrentSearchResult);
+  els.replaceAllBtn.addEventListener('click', replaceAllSearchResults);
+  els.searchResultsList.addEventListener('click', handleSearchResultClick);
+  els.toolPreviousPageBtn.addEventListener('click', () => jumpToPage(currentPreviewPage - 1));
+  els.toolNextPageBtn.addEventListener('click', () => jumpToPage(currentPreviewPage + 1));
+  els.jumpPageBtn.addEventListener('click', () => jumpToPage(els.toolPageInput.value));
+  els.toolPageInput.addEventListener('keydown', (event) => { if (event.key === 'Enter') jumpToPage(els.toolPageInput.value); });
+  els.headingNavigationList.addEventListener('click', handleHeadingNavigationClick);
+  document.querySelectorAll('input[name="pdfRangeMode"]').forEach((input) => input.addEventListener('change', updatePdfRangeControls));
+  [els.pdfRangeFrom, els.pdfRangeTo].forEach((input) => input.addEventListener('input', updatePdfRangeControls));
+  els.saveRangePdfBtn.addEventListener('click', saveSelectedPdfRange);
   els.manuscriptCheckBtn.addEventListener('click', openManuscriptCheckModal);
   els.preflightBtn.addEventListener('click', openPreflightModal);
   els.rerunPreflightBtn.addEventListener('click', () => runPreflightCheck({ announce: true }));
@@ -544,6 +589,23 @@ function bindEvents() {
   });
 
   document.addEventListener('keydown', (event) => {
+    const modifier = event.ctrlKey || event.metaKey;
+    if (modifier && event.key.toLowerCase() === 'f') {
+      event.preventDefault();
+      openEditingToolsModal({ focusSearch: true });
+      return;
+    }
+    if (modifier && event.key.toLowerCase() === 'z' && !isTextEditingTarget(event.target)) {
+      event.preventDefault();
+      if (event.shiftKey) redoEditHistory();
+      else undoEditHistory();
+      return;
+    }
+    if (modifier && event.key.toLowerCase() === 'y' && !isTextEditingTarget(event.target)) {
+      event.preventDefault();
+      redoEditHistory();
+      return;
+    }
     if (event.key !== 'Escape') return;
     document.querySelectorAll('.modal-backdrop:not([hidden])').forEach((modal) => closeModal(modal.id));
   });
@@ -582,7 +644,7 @@ function loadInitialProject() {
     applyState(migrated);
     saveCurrentProject(false);
     updateSaveStatus('v001データを移行済み');
-    showToast('v001の保存データをv018へ移行しました。');
+    showToast('v001の保存データをv019へ移行しました。');
     return;
   }
 
@@ -602,15 +664,15 @@ function migrateLegacyData() {
     return;
   }
 
-  const legacyIndex = readJsonFromStorage(LEGACY_V17_PROJECT_INDEX_KEY, []);
+  const legacyIndex = readJsonFromStorage(LEGACY_V18_PROJECT_INDEX_KEY, []);
   let migratedCount = 0;
   let mappedCurrentId = null;
-  const legacyCurrentId = safeStorageGet(LEGACY_V17_CURRENT_PROJECT_KEY);
+  const legacyCurrentId = safeStorageGet(LEGACY_V18_CURRENT_PROJECT_KEY);
 
   if (Array.isArray(legacyIndex)) {
     legacyIndex.forEach((item) => {
       if (!item?.id) return;
-      const raw = readJsonFromStorage(`${LEGACY_V17_PROJECT_PREFIX}${item.id}`, null);
+      const raw = readJsonFromStorage(`${LEGACY_V18_PROJECT_PREFIX}${item.id}`, null);
       if (!raw) return;
       const state = normalizeState(raw);
       state.metadata.appVersion = APP_VERSION;
@@ -624,7 +686,7 @@ function migrateLegacyData() {
     });
   }
 
-  const legacyTemplates = readJsonFromStorage(LEGACY_V17_TEMPLATE_STORAGE_KEY, []);
+  const legacyTemplates = readJsonFromStorage(LEGACY_V18_TEMPLATE_STORAGE_KEY, []);
   if (Array.isArray(legacyTemplates) && legacyTemplates.length) {
     safeStorageSet(TEMPLATE_STORAGE_KEY, JSON.stringify(legacyTemplates));
   }
@@ -633,12 +695,12 @@ function migrateLegacyData() {
   safeStorageSet(MIGRATION_MARKER_KEY, 'true');
 
   if (migratedCount > 0) {
-    showToast(`v018のプロジェクト${migratedCount}件をv018へ移行しました。`);
+    showToast(`v018のプロジェクト${migratedCount}件をv019へ移行しました。`);
   }
 }
 
 function restoreManuscriptEditorMode() {
-  const stored = safeStorageGet(MANUSCRIPT_MODE_KEY);
+  const stored = safeStorageGet(MANUSCRIPT_MODE_KEY) || safeStorageGet(LEGACY_MANUSCRIPT_MODE_KEY);
   setManuscriptEditorMode(stored === 'chapters' ? 'chapters' : 'full', {
     save: false,
     refresh: false,
@@ -1835,6 +1897,8 @@ function renderDocument() {
     applyGuides();
     updateParagraphSelectionHighlight();
     els.pageCount.textContent = `${fragments.length}ページ`;
+    updatePageNavigation({ preserveCurrent: true });
+    if (!els.editingToolsModal.hidden) renderHeadingNavigation();
     schedulePreflightCheck(220);
   } catch (error) {
     console.error(error);
@@ -3425,6 +3489,7 @@ function applyState(state) {
   } finally {
     isApplyingState = false;
   }
+  if (!isRestoringHistory) scheduleHistoryReset();
 }
 
 function applySettingsToInputs(settings) {
@@ -4593,7 +4658,7 @@ async function exportPdfFromPreflight() {
   await exportPdf();
 }
 
-async function exportPdf() {
+async function exportPdf(pageRange = null) {
   if (els.printBtn.disabled) return;
 
   const html2canvasRenderer = window.html2canvas;
@@ -4607,11 +4672,13 @@ async function exportPdf() {
   saveCurrentProject(false);
   await waitForFrames(2);
 
-  const papers = Array.from(els.pages.querySelectorAll('.paper'));
-  if (!papers.length) {
+  const allPapers = Array.from(els.pages.querySelectorAll('.paper'));
+  if (!allPapers.length) {
     showToast('出力できるページがありません。');
     return;
   }
+  const normalizedRange = normalizePdfRange(pageRange, allPapers.length);
+  const papers = allPapers.slice(normalizedRange.from - 1, normalizedRange.to);
 
   const state = collectState();
   const pageWidth = Math.max(1, sanitizeNumber(state.settings.pageWidth, 148));
@@ -4681,10 +4748,13 @@ async function exportPdf() {
 
     setPdfExportBusy(true, 'PDFファイルをまとめています。', 100);
     await waitForFrames(1);
-    const fileName = `${sanitizeFileName(state.projectName)}_${dateStamp()}.pdf`;
+    const rangeSuffix = normalizedRange.from === 1 && normalizedRange.to === allPapers.length
+      ? ''
+      : `_p${normalizedRange.from}-${normalizedRange.to}`;
+    const fileName = `${sanitizeFileName(state.projectName)}${rangeSuffix}_${dateStamp()}.pdf`;
     pdf.save(fileName);
     updateSaveStatus('PDF保存済み');
-    showToast('アプリのレイアウトを固定したPDFを保存しました。');
+    showToast(rangeSuffix ? `${normalizedRange.from}～${normalizedRange.to}ページをPDF保存しました。` : 'アプリのレイアウトを固定したPDFを保存しました。');
   } catch (error) {
     console.error(error);
     updateSaveStatus('PDF生成エラー');
@@ -4761,6 +4831,7 @@ function scheduleAutosave() {
 function markDirty() {
   updateSaveStatus('自動保存待ち');
   updateWorkflowGuide();
+  if (historyReady && !isApplyingState && !isRestoringHistory) scheduleHistoryCapture();
 }
 
 function updateSaveStatus(text) {
@@ -5495,4 +5566,562 @@ function createId(prefix) {
 
 function deepClone(value) {
   return JSON.parse(JSON.stringify(value));
+}
+
+// v019: 編集効率化（履歴・検索・移動・ページ範囲PDF）
+function isTextEditingTarget(target) {
+  if (!(target instanceof Element)) return false;
+  return Boolean(target.closest('input, textarea, select, [contenteditable="true"]'));
+}
+
+function scheduleHistoryReset() {
+  clearTimeout(historyResetTimer);
+  historyResetTimer = setTimeout(resetEditHistory, 80);
+}
+
+function resetEditHistory() {
+  clearTimeout(historyCaptureTimer);
+  historyReady = false;
+  editHistory = [];
+  redoHistory = [];
+  historyMediaData.clear();
+  const snapshot = captureHistorySnapshot();
+  const signature = historySnapshotSignature(snapshot);
+  editHistory.push(snapshot);
+  lastHistorySignature = signature;
+  historyReady = true;
+  updateHistoryButtons();
+}
+
+function scheduleHistoryCapture(delay = 520) {
+  clearTimeout(historyCaptureTimer);
+  historyCaptureTimer = setTimeout(captureHistoryNow, delay);
+}
+
+function captureHistoryNow() {
+  clearTimeout(historyCaptureTimer);
+  if (!historyReady || isApplyingState || isRestoringHistory) return false;
+  const snapshot = captureHistorySnapshot();
+  const signature = historySnapshotSignature(snapshot);
+  if (signature === lastHistorySignature) return false;
+  editHistory.push(snapshot);
+  if (editHistory.length > HISTORY_LIMIT) editHistory.shift();
+  redoHistory = [];
+  lastHistorySignature = signature;
+  updateHistoryButtons();
+  return true;
+}
+
+function captureHistorySnapshot() {
+  const state = collectState();
+  const media = (state.manuscript.media || []).map((asset) => {
+    if (asset?.id && asset.dataUrl) historyMediaData.set(asset.id, asset.dataUrl);
+    const copy = { ...asset };
+    delete copy.dataUrl;
+    return copy;
+  });
+  return {
+    projectName: state.projectName,
+    manuscript: {
+      title: state.manuscript.title,
+      subtitle: state.manuscript.subtitle,
+      author: state.manuscript.author,
+      body: state.manuscript.body,
+      paragraphs: deepClone(state.manuscript.paragraphs || []),
+      chapters: deepClone(state.manuscript.chapters || []),
+      media,
+      matter: deepClone(state.manuscript.matter || DEFAULT_BOOK_MATTER),
+      trailingBlankLines: state.manuscript.trailingBlankLines || 0
+    },
+    paragraphOverrides: deepClone(state.paragraphOverrides || {}),
+    settings: deepClone(state.settings || DEFAULT_SETTINGS)
+  };
+}
+
+function historySnapshotSignature(snapshot) {
+  try {
+    return JSON.stringify(snapshot);
+  } catch (error) {
+    console.error(error);
+    return `${Date.now()}-${Math.random()}`;
+  }
+}
+
+function restoreHistorySnapshot(snapshot, message) {
+  if (!snapshot) return;
+  const current = collectState();
+  const currentMedia = new Map((current.manuscript.media || []).map((asset) => [asset.id, asset.dataUrl]));
+  const media = (snapshot.manuscript.media || []).map((asset) => ({
+    ...deepClone(asset),
+    dataUrl: historyMediaData.get(asset.id) || currentMedia.get(asset.id) || ''
+  })).filter((asset) => asset.dataUrl);
+  const restored = normalizeState({
+    ...current,
+    projectName: snapshot.projectName,
+    manuscript: {
+      ...current.manuscript,
+      ...deepClone(snapshot.manuscript),
+      media
+    },
+    paragraphOverrides: deepClone(snapshot.paragraphOverrides),
+    settings: deepClone(snapshot.settings)
+  });
+  isRestoringHistory = true;
+  try {
+    applyState(restored);
+  } finally {
+    isRestoringHistory = false;
+  }
+  lastHistorySignature = historySnapshotSignature(snapshot);
+  updateSaveStatus('自動保存待ち');
+  scheduleAutosave();
+  scheduleManuscriptCheck();
+  schedulePreflightCheck(300);
+  updateHistoryButtons();
+  showToast(message);
+}
+
+function undoEditHistory() {
+  if (!historyReady) return;
+  captureHistoryNow();
+  if (editHistory.length <= 1) {
+    showToast('これ以上戻せる編集はありません。');
+    return;
+  }
+  const current = editHistory.pop();
+  redoHistory.push(current);
+  const target = editHistory[editHistory.length - 1];
+  restoreHistorySnapshot(target, '直前の編集状態へ戻しました。');
+}
+
+function redoEditHistory() {
+  if (!historyReady || !redoHistory.length) {
+    showToast('やり直せる編集はありません。');
+    return;
+  }
+  const target = redoHistory.pop();
+  editHistory.push(target);
+  restoreHistorySnapshot(target, '戻した編集をやり直しました。');
+}
+
+function updateHistoryButtons() {
+  if (!els.undoBtn || !els.redoBtn) return;
+  const undoCount = Math.max(0, editHistory.length - 1);
+  const redoCount = redoHistory.length;
+  els.undoBtn.disabled = undoCount === 0;
+  els.redoBtn.disabled = redoCount === 0;
+  els.undoBtn.title = undoCount ? `直前の編集状態へ戻す（残り${undoCount}段階）` : '戻せる編集はありません';
+  els.redoBtn.title = redoCount ? `戻した編集をやり直す（残り${redoCount}段階）` : 'やり直せる編集はありません';
+}
+
+function openEditingToolsModal(options = {}) {
+  renderDocument();
+  updatePageNavigation({ preserveCurrent: true });
+  renderHeadingNavigation();
+  updatePdfRangeControls();
+  openModal('editingToolsModal');
+  if (options.focusSearch !== false) {
+    setTimeout(() => {
+      els.searchTextInput.focus();
+      els.searchTextInput.select();
+    }, 170);
+  }
+}
+
+function getSearchSources() {
+  const sources = [
+    { id: 'bodyInput', label: '本文', element: els.bodyInput, type: 'manuscript' }
+  ];
+  if (els.searchScope.value !== 'all') return sources;
+  return [
+    { id: 'projectName', label: 'プロジェクト名', element: els.projectName, type: 'field' },
+    { id: 'titleInput', label: '書名', element: els.titleInput, type: 'field' },
+    { id: 'subtitleInput', label: 'サブタイトル', element: els.subtitleInput, type: 'field' },
+    { id: 'authorInput', label: '著者名', element: els.authorInput, type: 'field' },
+    ...sources,
+    { id: 'forewordTitle', label: 'まえがき見出し', element: els.forewordTitle, type: 'matter', matterKey: 'foreword' },
+    { id: 'forewordBody', label: 'まえがき', element: els.forewordBody, type: 'matter', matterKey: 'foreword' },
+    { id: 'afterwordTitle', label: 'あとがき見出し', element: els.afterwordTitle, type: 'matter', matterKey: 'afterword' },
+    { id: 'afterwordBody', label: 'あとがき', element: els.afterwordBody, type: 'matter', matterKey: 'afterword' },
+    { id: 'authorProfileTitle', label: '著者紹介見出し', element: els.authorProfileTitle, type: 'matter', matterKey: 'authorProfile' },
+    { id: 'authorProfileBody', label: '著者紹介', element: els.authorProfileBody, type: 'matter', matterKey: 'authorProfile' },
+    { id: 'colophonHeading', label: '奥付見出し', element: els.colophonHeading, type: 'matter', matterKey: 'colophon' },
+    { id: 'colophonBookTitle', label: '奥付・書名', element: els.colophonBookTitle, type: 'matter', matterKey: 'colophon' },
+    { id: 'colophonAuthor', label: '奥付・著者', element: els.colophonAuthor, type: 'matter', matterKey: 'colophon' },
+    { id: 'colophonIssuedBy', label: '奥付・発行者', element: els.colophonIssuedBy, type: 'matter', matterKey: 'colophon' },
+    { id: 'colophonPublisher', label: '奥付・発行所', element: els.colophonPublisher, type: 'matter', matterKey: 'colophon' },
+    { id: 'colophonContact', label: '奥付・連絡先', element: els.colophonContact, type: 'matter', matterKey: 'colophon' },
+    { id: 'colophonCopyright', label: '奥付・著作権', element: els.colophonCopyright, type: 'matter', matterKey: 'colophon' },
+    { id: 'colophonNotes', label: '奥付・備考', element: els.colophonNotes, type: 'matter', matterKey: 'colophon' }
+  ];
+}
+
+function runEditingSearch(options = {}) {
+  const query = String(els.searchTextInput.value || '');
+  searchResults = [];
+  currentSearchResultIndex = -1;
+  if (!query) {
+    renderSearchResults();
+    return [];
+  }
+  const caseSensitive = els.searchCaseSensitive.checked;
+  const needle = caseSensitive ? query : query.toLocaleLowerCase('ja-JP');
+  getSearchSources().forEach((source) => {
+    const value = String(source.element?.value || '');
+    const haystack = caseSensitive ? value : value.toLocaleLowerCase('ja-JP');
+    let cursor = 0;
+    while (cursor <= haystack.length - needle.length && searchResults.length < 500) {
+      const index = haystack.indexOf(needle, cursor);
+      if (index < 0) break;
+      searchResults.push({ ...source, start: index, end: index + query.length, match: value.slice(index, index + query.length), value });
+      cursor = index + Math.max(1, needle.length);
+    }
+  });
+  if (searchResults.length) currentSearchResultIndex = Math.max(0, Math.min(searchResults.length - 1, Number(options.keepIndex) || 0));
+  renderSearchResults();
+  return searchResults;
+}
+
+function renderSearchResults() {
+  const query = String(els.searchTextInput.value || '');
+  const total = searchResults.length;
+  els.searchResultSummary.textContent = !query
+    ? '検索語を入力してください。'
+    : total
+      ? `${total}件見つかりました。結果を選ぶと該当箇所へ移動します。`
+      : '一致する文字は見つかりませんでした。';
+  const hasResults = total > 0;
+  els.previousSearchResultBtn.disabled = !hasResults;
+  els.nextSearchResultBtn.disabled = !hasResults;
+  els.replaceCurrentBtn.disabled = !hasResults;
+  els.replaceAllBtn.disabled = !hasResults;
+  els.searchResultsList.replaceChildren();
+  searchResults.slice(0, 200).forEach((result, index) => {
+    const row = document.createElement('button');
+    row.type = 'button';
+    row.className = `search-result-row${index === currentSearchResultIndex ? ' current' : ''}`;
+    row.dataset.searchResultIndex = String(index);
+    const meta = document.createElement('span');
+    meta.className = 'search-result-meta';
+    meta.textContent = `${result.label}・${getLineNumberAt(result.value, result.start)}行目`;
+    const excerpt = document.createElement('strong');
+    excerpt.textContent = buildSearchExcerpt(result.value, result.start, result.end);
+    row.append(meta, excerpt);
+    els.searchResultsList.appendChild(row);
+  });
+  if (total > 200) {
+    const note = document.createElement('p');
+    note.className = 'search-result-limit-note';
+    note.textContent = `最初の200件を表示しています（検出${total}件）。`;
+    els.searchResultsList.appendChild(note);
+  }
+}
+
+function buildSearchExcerpt(value, start, end) {
+  const lineStart = Math.max(0, value.lastIndexOf('\n', start - 1) + 1);
+  const nextBreak = value.indexOf('\n', end);
+  const lineEnd = nextBreak < 0 ? value.length : nextBreak;
+  const line = value.slice(lineStart, lineEnd).trim();
+  return line.length > 72 ? `${line.slice(0, 69)}…` : line || '（空行）';
+}
+
+function getLineNumberAt(value, index) {
+  return String(value).slice(0, index).split('\n').length;
+}
+
+function handleSearchResultClick(event) {
+  const row = event.target.closest('[data-search-result-index]');
+  if (!row) return;
+  currentSearchResultIndex = Number(row.dataset.searchResultIndex) || 0;
+  renderSearchResults();
+  focusCurrentSearchResult();
+}
+
+function navigateSearchResult(direction) {
+  if (!searchResults.length) return;
+  currentSearchResultIndex = (currentSearchResultIndex + direction + searchResults.length) % searchResults.length;
+  renderSearchResults();
+  const row = els.searchResultsList.querySelector(`[data-search-result-index="${currentSearchResultIndex}"]`);
+  row?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function focusCurrentSearchResult() {
+  const result = searchResults[currentSearchResultIndex];
+  if (!result?.element) return;
+  closeModal('editingToolsModal');
+  setTimeout(() => {
+    if (result.type === 'manuscript') setManuscriptEditorMode('full', { focus: false });
+    if (result.type === 'matter') {
+      openBookStructureModal();
+      requestAnimationFrame(() => {
+        const card = document.querySelector(`[data-matter-card="${CSS.escape(result.matterKey || '')}"]`);
+        card?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+    }
+    setTimeout(() => {
+      result.element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      result.element.focus({ preventScroll: true });
+      if (typeof result.element.setSelectionRange === 'function') result.element.setSelectionRange(result.start, result.end);
+      result.element.classList.add('search-target-highlight');
+      setTimeout(() => result.element.classList.remove('search-target-highlight'), 1700);
+    }, result.type === 'matter' ? 170 : 20);
+  }, 130);
+}
+
+function replaceCurrentSearchResult() {
+  const result = searchResults[currentSearchResultIndex];
+  if (!result?.element) return;
+  const value = String(result.element.value || '');
+  const query = String(els.searchTextInput.value || '');
+  const replacement = String(els.replaceTextInput.value || '');
+  const actual = value.slice(result.start, result.end);
+  const matches = els.searchCaseSensitive.checked
+    ? actual === query
+    : actual.toLocaleLowerCase('ja-JP') === query.toLocaleLowerCase('ja-JP');
+  if (!matches) {
+    runEditingSearch();
+    showToast('原稿が変更されたため、検索結果を更新しました。');
+    return;
+  }
+  applySearchSourceValue(result.element, `${value.slice(0, result.start)}${replacement}${value.slice(result.end)}`);
+  runEditingSearch({ keepIndex: currentSearchResultIndex });
+  showToast('選択した1件を置換しました。');
+}
+
+function replaceAllSearchResults() {
+  const query = String(els.searchTextInput.value || '');
+  if (!query || !searchResults.length) return;
+  const replacement = String(els.replaceTextInput.value || '');
+  if (!window.confirm(`${searchResults.length}件を「${replacement}」へ置換しますか？`)) return;
+  const caseSensitive = els.searchCaseSensitive.checked;
+  const sources = getSearchSources();
+  let replacedCount = 0;
+  sources.forEach((source) => {
+    const value = String(source.element?.value || '');
+    const result = replaceAllLiteral(value, query, replacement, caseSensitive);
+    if (!result.count) return;
+    replacedCount += result.count;
+    applySearchSourceValue(source.element, result.value);
+  });
+  runEditingSearch();
+  showToast(`${replacedCount}件を置換しました。`);
+}
+
+function replaceAllLiteral(value, query, replacement, caseSensitive) {
+  if (caseSensitive) {
+    const parts = value.split(query);
+    return { value: parts.join(replacement), count: Math.max(0, parts.length - 1) };
+  }
+  const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const regex = new RegExp(escaped, 'giu');
+  let count = 0;
+  const result = value.replace(regex, () => { count += 1; return replacement; });
+  return { value: result, count };
+}
+
+function applySearchSourceValue(element, value) {
+  if (!element) return;
+  element.value = value;
+  element.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+function handlePreviewScroll() {
+  clearTimeout(previewScrollTimer);
+  previewScrollTimer = setTimeout(() => {
+    const papers = Array.from(els.pages.querySelectorAll('.paper'));
+    if (!papers.length) return;
+    const viewportRect = els.previewViewport.getBoundingClientRect();
+    const center = viewportRect.top + viewportRect.height / 2;
+    let bestPage = currentPreviewPage;
+    let bestDistance = Number.POSITIVE_INFINITY;
+    papers.forEach((paper) => {
+      const rect = paper.getBoundingClientRect();
+      const distance = Math.abs((rect.top + rect.bottom) / 2 - center);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        bestPage = Number(paper.dataset.page) || 1;
+      }
+    });
+    currentPreviewPage = bestPage;
+    updatePageNavigation({ preserveCurrent: true });
+  }, 80);
+}
+
+function updatePageNavigation(options = {}) {
+  const total = els.pages.querySelectorAll('.paper').length || 1;
+  if (!options.preserveCurrent) currentPreviewPage = 1;
+  currentPreviewPage = Math.max(1, Math.min(total, Number(currentPreviewPage) || 1));
+  [els.currentPageInput, els.toolPageInput, els.pdfRangeFrom, els.pdfRangeTo].forEach((input) => {
+    if (!input) return;
+    input.max = String(total);
+  });
+  els.currentPageInput.value = String(currentPreviewPage);
+  els.totalPageQuick.textContent = String(total);
+  els.toolPageInput.value = String(currentPreviewPage);
+  els.toolPageTotal.textContent = `/ ${total}ページ`;
+  els.previousPageBtn.disabled = currentPreviewPage <= 1;
+  els.nextPageBtn.disabled = currentPreviewPage >= total;
+  els.toolPreviousPageBtn.disabled = currentPreviewPage <= 1;
+  els.toolNextPageBtn.disabled = currentPreviewPage >= total;
+  updatePdfRangeControls();
+}
+
+function jumpToPage(value) {
+  const total = els.pages.querySelectorAll('.paper').length || 1;
+  const page = Math.max(1, Math.min(total, Math.trunc(sanitizeNumber(value, currentPreviewPage))));
+  currentPreviewPage = page;
+  const paper = els.pages.querySelector(`.paper[data-page="${page}"]`);
+  if (!els.editingToolsModal.hidden) closeModal('editingToolsModal');
+  setTimeout(() => {
+    paper?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    paper?.classList.add('page-jump-highlight');
+    setTimeout(() => paper?.classList.remove('page-jump-highlight'), 1300);
+    updatePageNavigation({ preserveCurrent: true });
+  }, 130);
+}
+
+function getHeadingNavigationItems() {
+  const items = [];
+  els.pages.querySelectorAll('.paper').forEach((paper) => {
+    paper.querySelectorAll('.body-heading[data-block-id]').forEach((heading) => {
+      const id = heading.dataset.blockId;
+      if (items.some((item) => item.id === id)) return;
+      items.push({
+        id,
+        level: Number(heading.dataset.headingLevel) || 1,
+        text: heading.textContent.trim(),
+        page: Number(paper.dataset.page) || 1
+      });
+    });
+  });
+  return items;
+}
+
+function renderHeadingNavigation() {
+  const items = getHeadingNavigationItems();
+  els.headingNavigationSummary.textContent = `${items.length}件`;
+  els.headingNavigationList.replaceChildren();
+  if (!items.length) {
+    const empty = document.createElement('div');
+    empty.className = 'heading-navigation-empty';
+    empty.innerHTML = '<strong>見出しがありません</strong><span>本文で「# 見出し」を入力すると、ここから移動できます。</span>';
+    els.headingNavigationList.appendChild(empty);
+    return;
+  }
+  items.forEach((item) => {
+    const row = document.createElement('article');
+    row.className = `heading-navigation-row level-${item.level}`;
+    const copy = document.createElement('div');
+    const badge = document.createElement('span');
+    badge.className = 'heading-level-badge';
+    badge.textContent = item.level === 1 ? '大' : item.level === 2 ? '中' : '小';
+    const title = document.createElement('strong');
+    title.textContent = item.text || '名称未設定の見出し';
+    const page = document.createElement('span');
+    page.className = 'heading-page-label';
+    page.textContent = `${item.page}ページ`;
+    copy.append(badge, title, page);
+    const actions = document.createElement('div');
+    actions.className = 'heading-navigation-actions';
+    const previewButton = document.createElement('button');
+    previewButton.type = 'button';
+    previewButton.className = 'button modal-secondary';
+    previewButton.dataset.headingNavigate = 'preview';
+    previewButton.dataset.headingId = item.id;
+    previewButton.dataset.page = String(item.page);
+    previewButton.textContent = '誌面へ';
+    const sourceButton = document.createElement('button');
+    sourceButton.type = 'button';
+    sourceButton.className = 'button modal-secondary';
+    sourceButton.dataset.headingNavigate = 'source';
+    sourceButton.dataset.headingId = item.id;
+    sourceButton.textContent = '原稿へ';
+    actions.append(previewButton, sourceButton);
+    row.append(copy, actions);
+    els.headingNavigationList.appendChild(row);
+  });
+}
+
+function handleHeadingNavigationClick(event) {
+  const button = event.target.closest('[data-heading-navigate]');
+  if (!button) return;
+  const id = button.dataset.headingId;
+  if (button.dataset.headingNavigate === 'preview') {
+    const page = Number(button.dataset.page) || 1;
+    closeModal('editingToolsModal');
+    setTimeout(() => {
+      jumpToPage(page);
+      const target = els.pages.querySelector(`.body-heading[data-block-id="${CSS.escape(id)}"]`);
+      setTimeout(() => {
+        target?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        target?.classList.add('search-target-highlight');
+        setTimeout(() => target?.classList.remove('search-target-highlight'), 1600);
+      }, 220);
+    }, 120);
+    return;
+  }
+  navigateHeadingToSource(id);
+}
+
+function navigateHeadingToSource(id) {
+  const record = paragraphRecords.find((item) => item.id === id && item.type === 'heading');
+  if (!record) return;
+  const prefix = '#'.repeat(Math.max(1, Math.min(3, Number(record.level) || 1)));
+  const line = `${prefix} ${record.text}`;
+  const value = els.bodyInput.value;
+  let index = value.indexOf(line);
+  if (index < 0) index = value.indexOf(String(record.text || ''));
+  closeModal('editingToolsModal');
+  setTimeout(() => {
+    setManuscriptEditorMode('full', { focus: false });
+    els.bodyInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    els.bodyInput.focus({ preventScroll: true });
+    if (index >= 0) els.bodyInput.setSelectionRange(index, index + (line.length || record.text.length));
+    els.bodyInput.classList.add('search-target-highlight');
+    setTimeout(() => els.bodyInput.classList.remove('search-target-highlight'), 1600);
+  }, 140);
+}
+
+function updatePdfRangeControls() {
+  if (!els.pdfRangeInputs) return;
+  const total = els.pages.querySelectorAll('.paper').length || 1;
+  const mode = document.querySelector('input[name="pdfRangeMode"]:checked')?.value || 'all';
+  els.pdfRangeInputs.hidden = mode !== 'range';
+  let from = Math.max(1, Math.min(total, Math.trunc(sanitizeNumber(els.pdfRangeFrom.value, 1))));
+  let to = Math.max(1, Math.min(total, Math.trunc(sanitizeNumber(els.pdfRangeTo.value, total))));
+  if (!els.pdfRangeTo.dataset.initialized) {
+    to = total;
+    els.pdfRangeTo.dataset.initialized = 'true';
+  }
+  els.pdfRangeFrom.value = String(from);
+  els.pdfRangeTo.value = String(to);
+  els.pdfRangeSummary.textContent = mode === 'all'
+    ? `全${total}ページを保存します。`
+    : `${Math.min(from, to)}～${Math.max(from, to)}ページ（${Math.abs(to - from) + 1}ページ）を保存します。`;
+}
+
+function normalizePdfRange(range, total) {
+  if (!range || range.mode === 'all') return { from: 1, to: total };
+  let from = Math.max(1, Math.min(total, Math.trunc(sanitizeNumber(range.from, 1))));
+  let to = Math.max(1, Math.min(total, Math.trunc(sanitizeNumber(range.to, total))));
+  if (from > to) [from, to] = [to, from];
+  return { from, to };
+}
+
+async function saveSelectedPdfRange() {
+  renderDocument();
+  await waitForFrames(2);
+  const issues = runPreflightCheck({ announce: false });
+  const errors = issues.filter((issue) => issue.severity === 'error').length;
+  if (errors) {
+    closeModal('editingToolsModal');
+    setTimeout(() => openModal('preflightModal'), 140);
+    showToast(`PDF保存前に修正が必要なエラーが${errors}件あります。`);
+    return;
+  }
+  const mode = document.querySelector('input[name="pdfRangeMode"]:checked')?.value || 'all';
+  const range = normalizePdfRange({ mode, from: els.pdfRangeFrom.value, to: els.pdfRangeTo.value }, els.pages.querySelectorAll('.paper').length || 1);
+  closeModal('editingToolsModal');
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  await exportPdf(range);
 }

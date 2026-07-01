@@ -4,8 +4,8 @@
 <head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1" name="viewport"/>
-<meta content="出版社向け簡易組版アプリ v018" name="description"/>
-<title>組版アプリ v018</title>
+<meta content="出版社向け簡易組版アプリ v019" name="description"/>
+<title>組版アプリ v019</title>
 <link href="styles.css" rel="stylesheet"/>
 <link rel="icon" href="data:,">
 </head>
@@ -14,7 +14,7 @@
 <header class="topbar">
 <div class="brand-block">
 <strong>組版アプリ</strong>
-<span class="version-badge">v018</span>
+<span class="version-badge">v019</span>
 </div>
 <label class="project-name-wrap">
 <span>プロジェクト名</span>
@@ -26,8 +26,11 @@
 <button class="button secondary" id="newBtn" type="button">新しく作る</button>
 <button class="button secondary" id="projectsBtn" type="button">開く</button>
 <button class="button secondary" id="saveBtn" type="button">保存</button>
+<button class="button secondary history-button" id="undoBtn" type="button" title="直前の編集状態へ戻す" disabled>↶ 戻す</button>
+<button class="button secondary history-button" id="redoBtn" type="button" title="戻した編集をやり直す" disabled>↷ やり直す</button>
 </div>
 <div class="toolbar-group toolbar-content-group" aria-label="書籍内容">
+<button class="button secondary editing-tools-button" id="editingToolsBtn" type="button">検索・移動</button>
 <button class="button secondary book-structure-button" id="bookStructureBtn" type="button">書籍構成 <span class="structure-count-badge" id="bookStructureBadge">0</span></button>
 <button class="button secondary media-manager-button" id="mediaManagerBtn" type="button">画像 <span class="media-count-badge" id="mediaCountBadge">0</span></button>
 </div>
@@ -132,9 +135,9 @@
       </div>
       <label class="field body-field full-body-field">
         <span>本文全体</span>
-        <textarea id="bodyInput" placeholder="ここに本文を貼り付けてください。" spellcheck="false"># 第1章　組版アプリv018
+        <textarea id="bodyInput" placeholder="ここに本文を貼り付けてください。" spellcheck="false"># 第1章　組版アプリv019
 
-これは、組版アプリv018の動作確認用原稿です。用紙設定から「縦書き・右綴じ」へ切り替えると、同じ原稿を縦書きで確認できます。
+これは、組版アプリv019の動作確認用原稿です。用紙設定から「縦書き・右綴じ」へ切り替えると、同じ原稿を縦書きで確認できます。
 
 文字を選択して、**太字**、《《傍点》》、｜組版《くみはん》、__下線__を設定できます。記号はプレビューやPDFには表示されません。
 
@@ -280,6 +283,11 @@
 <option value="1">100%</option>
 </select>
 </label>
+<div class="page-quick-nav" aria-label="ページ移動">
+<button class="icon-button compact" id="previousPageBtn" type="button" aria-label="前のページ">‹</button>
+<label><span>ページ</span><input id="currentPageInput" min="1" step="1" type="number" value="1"/><small>/ <span id="totalPageQuick">1</span></small></label>
+<button class="icon-button compact" id="nextPageBtn" type="button" aria-label="次のページ">›</button>
+</div>
 <button aria-pressed="true" class="button ghost" id="toggleGuidesBtn" type="button">余白ガイド</button>
 </div>
 </div>
@@ -680,7 +688,7 @@
 <div class="modal-backdrop" hidden id="welcomeModal">
 <section aria-labelledby="welcomeModalTitle" aria-modal="true" class="modal-card onboarding-modal-card" role="dialog">
 <div class="welcome-hero">
-<div class="welcome-brand"><span>組</span><div><p>TYPESETTING WORKSPACE</p><strong>組版アプリ v018</strong></div></div>
+<div class="welcome-brand"><span>組</span><div><p>TYPESETTING WORKSPACE</p><strong>組版アプリ v019</strong></div></div>
 <h2 id="welcomeModalTitle">何から始めますか？</h2>
 <p>既存原稿の貼り付けからPDF保存まで、画面の案内に沿って進められます。</p>
 </div>
@@ -902,6 +910,63 @@
 </section>
 </div>
 
+
+
+<div class="modal-backdrop" hidden id="editingToolsModal">
+<section aria-labelledby="editingToolsModalTitle" aria-modal="true" class="modal-card editing-tools-modal-card" role="dialog">
+<header class="modal-header">
+<div><p class="eyebrow">EDITING TOOLS</p><h2 id="editingToolsModalTitle">検索・移動・範囲出力</h2></div>
+<button aria-label="閉じる" class="icon-button" data-close-modal="editingToolsModal" type="button">×</button>
+</header>
+<div class="editing-tools-scroll">
+<section class="editing-tool-section search-tool-section">
+<div class="editing-tool-heading"><div><strong>全文検索・置換</strong><span>本文や書籍構成の文字をまとめて探します</span></div><span class="tool-shortcut">Ctrl / ⌘ + F</span></div>
+<div class="search-control-grid">
+<label class="field compact"><span>検索する文字</span><input id="searchTextInput" type="text" placeholder="検索語を入力" autocomplete="off"/></label>
+<label class="field compact"><span>置換後の文字</span><input id="replaceTextInput" type="text" placeholder="置換しない場合は空欄" autocomplete="off"/></label>
+<label class="field compact"><span>検索範囲</span><select id="searchScope"><option value="body">本文のみ</option><option value="all">書籍全体</option></select></label>
+<label class="check-row search-option-row"><input id="searchCaseSensitive" type="checkbox"/><span>大文字・小文字を区別</span></label>
+</div>
+<div class="editing-tool-actions">
+<button class="button modal-primary" id="runSearchBtn" type="button">検索</button>
+<button class="button modal-secondary" id="previousSearchResultBtn" type="button" disabled>前の結果</button>
+<button class="button modal-secondary" id="nextSearchResultBtn" type="button" disabled>次の結果</button>
+<button class="button modal-secondary" id="replaceCurrentBtn" type="button" disabled>この1件を置換</button>
+<button class="button modal-secondary" id="replaceAllBtn" type="button" disabled>すべて置換</button>
+</div>
+<div class="search-result-summary" id="searchResultSummary">検索語を入力してください。</div>
+<div class="search-results-list" id="searchResultsList"></div>
+</section>
+<section class="editing-tool-section navigation-tool-section">
+<div class="editing-tool-heading"><div><strong>ページ・見出し移動</strong><span>長い原稿でも目的の位置へすぐ移動します</span></div></div>
+<div class="page-jump-card">
+<button class="icon-button" id="toolPreviousPageBtn" type="button" aria-label="前のページ">‹</button>
+<label><span>ページ番号</span><input id="toolPageInput" min="1" step="1" type="number" value="1"/></label>
+<span id="toolPageTotal">/ 1ページ</span>
+<button class="button modal-secondary" id="jumpPageBtn" type="button">移動</button>
+<button class="icon-button" id="toolNextPageBtn" type="button" aria-label="次のページ">›</button>
+</div>
+<div class="heading-navigation-header"><strong>見出し一覧</strong><span id="headingNavigationSummary">0件</span></div>
+<div class="heading-navigation-list" id="headingNavigationList"></div>
+</section>
+<section class="editing-tool-section pdf-range-section">
+<div class="editing-tool-heading"><div><strong>ページ範囲PDF</strong><span>校正したいページだけを直接PDFに保存できます</span></div></div>
+<div class="pdf-range-controls">
+<label class="radio-card"><input checked name="pdfRangeMode" type="radio" value="all"/><span><strong>全ページ</strong><small>通常のPDF保存と同じ</small></span></label>
+<label class="radio-card"><input name="pdfRangeMode" type="radio" value="range"/><span><strong>範囲を指定</strong><small>連続するページを保存</small></span></label>
+<div class="pdf-range-inputs" id="pdfRangeInputs" hidden>
+<label class="field compact"><span>開始ページ</span><input id="pdfRangeFrom" min="1" step="1" type="number" value="1"/></label>
+<span>～</span>
+<label class="field compact"><span>終了ページ</span><input id="pdfRangeTo" min="1" step="1" type="number" value="1"/></label>
+</div>
+</div>
+<div class="pdf-range-summary" id="pdfRangeSummary">全ページを保存します。</div>
+<button class="button modal-primary" id="saveRangePdfBtn" type="button">この範囲をPDF保存</button>
+</section>
+</div>
+<footer class="editing-tools-footer"><span>元に戻す／やり直すは、原稿・組版・構成の変更を最大40段階保持します。</span><button class="button modal-secondary" data-close-modal="editingToolsModal" type="button">閉じる</button></footer>
+</section>
+</div>
 
 <div class="modal-backdrop" hidden id="preflightModal">
 <section aria-labelledby="preflightModalTitle" aria-modal="true" class="modal-card preflight-modal-card" role="dialog">
