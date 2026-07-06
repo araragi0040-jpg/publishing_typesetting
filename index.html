@@ -4,8 +4,8 @@
 <head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1" name="viewport"/>
-<meta content="出版社向け簡易組版アプリ v019.2" name="description"/>
-<title>組版アプリ v019.2</title>
+<meta content="出版社向け簡易組版アプリ v020" name="description"/>
+<title>組版アプリ v020</title>
 <link href="styles.css" rel="stylesheet"/>
 <link rel="icon" href="data:,">
 </head>
@@ -14,7 +14,7 @@
 <header class="topbar">
 <div class="brand-block">
 <strong>組版アプリ</strong>
-<span class="version-badge">v019.2</span>
+<span class="version-badge">v020</span>
 </div>
 <label class="project-name-wrap">
 <span>プロジェクト名</span>
@@ -32,7 +32,7 @@
 <div class="toolbar-group toolbar-content-group" aria-label="書籍内容">
 <button class="button secondary editing-tools-button" id="editingToolsBtn" type="button">検索・移動</button>
 <button class="button secondary book-structure-button" id="bookStructureBtn" type="button">書籍構成 <span class="structure-count-badge" id="bookStructureBadge">0</span></button>
-<button class="button secondary media-manager-button" id="mediaManagerBtn" type="button">画像 <span class="media-count-badge" id="mediaCountBadge">0</span></button>
+<button class="button secondary media-manager-button" id="mediaManagerBtn" type="button">画像・装飾 <span class="media-count-badge" id="mediaCountBadge">0</span></button>
 </div>
 <div class="toolbar-group toolbar-output-group" aria-label="確認と出力">
 <button class="button check-button" id="manuscriptCheckBtn" type="button">原稿チェック <span class="check-count-badge" id="manuscriptCheckBadge">0</span></button>
@@ -265,7 +265,7 @@
 <h2 id="previewTitle">ページプレビュー</h2>
 </div>
 <div class="preview-toolbar-right">
-<p class="preview-hint">本文段落をクリックして個別調整</p>
+<p class="preview-hint">本文段落は個別調整／装飾画像はドラッグで移動</p>
 <div class="preview-controls">
 <label>
 <span>表示</span>
@@ -291,6 +291,19 @@
 <button aria-pressed="true" class="button ghost" id="toggleGuidesBtn" type="button">余白ガイド</button>
 </div>
 </div>
+</div>
+<div class="decoration-selection-bar" id="decorationSelectionBar" hidden>
+  <div class="decoration-selection-copy">
+    <span class="decoration-selection-icon">✦</span>
+    <div><strong id="selectedDecorationName">装飾画像</strong><small id="selectedDecorationMeta">1ページ・前面</small></div>
+  </div>
+  <div class="decoration-selection-actions">
+    <button class="button ghost compact-action" id="decorationLockBtn" type="button">ロック</button>
+    <button class="button ghost compact-action" id="decorationLayerBtn" type="button">背面へ</button>
+    <button class="button ghost compact-action" id="decorationDuplicateBtn" type="button">複製</button>
+    <button class="button secondary compact-action" id="decorationDetailsBtn" type="button">数値で調整</button>
+    <button class="button danger-outline compact-action" id="decorationDeleteBtn" type="button">削除</button>
+  </div>
 </div>
 <div class="preview-viewport" id="previewViewport">
 <div aria-live="polite" class="pages single" id="pages"></div>
@@ -881,10 +894,11 @@
 </div>
 <button aria-label="閉じる" class="icon-button" data-close-modal="mediaModal" type="button">×</button>
 </header>
-<div class="media-intro-card">
+<div class="media-intro-card four-steps">
 <div class="media-step"><span>1</span><div><strong>画像を追加</strong><small>JPEG・PNG・WebPに対応</small></div></div>
-<div class="media-step"><span>2</span><div><strong>見た目を設定</strong><small>幅・配置・キャプション</small></div></div>
-<div class="media-step"><span>3</span><div><strong>本文へ挿入</strong><small>選択中の編集欄へ追加</small></div></div>
+<div class="media-step"><span>2</span><div><strong>本文画像</strong><small>文章の流れに沿って配置</small></div></div>
+<div class="media-step"><span>3</span><div><strong>装飾画像</strong><small>ページ上へ自由配置</small></div></div>
+<div class="media-step"><span>4</span><div><strong>PDFへ反映</strong><small>配置した見た目を固定</small></div></div>
 </div>
 <div class="media-toolbar-row">
 <label class="media-upload-button">
@@ -900,17 +914,45 @@
 <small>重要な案件はJSONも保存してください。</small>
 </div>
 </div>
-<div class="media-target-note" id="mediaTargetNote">全文編集のカーソル位置へ挿入します。</div>
+<div class="media-target-note" id="mediaTargetNote">本文画像はカーソル位置へ、装飾画像は現在のページへ配置します。</div>
 <div class="media-library-list" id="mediaLibraryList"></div>
 <div class="media-empty-state" id="mediaEmptyState">
 <div aria-hidden="true">▧</div>
 <strong>画像はまだありません</strong>
 <p>「画像をアップロード」から追加してください。</p>
 </div>
+<section class="decoration-library-section">
+  <div class="decoration-library-heading"><div><strong>ページ上の装飾画像</strong><span>本文とは独立して、好きな位置・大きさで配置します</span></div><span id="decorationCountSummary">0点</span></div>
+  <div class="decoration-library-list" id="decorationLibraryList"></div>
+  <div class="decoration-empty-state" id="decorationEmptyState"><strong>装飾画像はまだありません</strong><span>上の画像カードから「装飾として配置」を押してください。</span></div>
+</section>
 </section>
 </div>
 
 
+
+<div class="modal-backdrop" hidden id="decorationModal">
+<section aria-labelledby="decorationModalTitle" aria-modal="true" class="modal-card decoration-modal-card" role="dialog">
+<header class="modal-header"><div><p class="eyebrow">FREE LAYOUT IMAGE</p><h2 id="decorationModalTitle">装飾画像を調整</h2></div><button aria-label="閉じる" class="icon-button" data-close-modal="decorationModal" type="button">×</button></header>
+<div class="decoration-detail-layout">
+  <div class="decoration-detail-preview"><img id="decorationDetailImage" alt="装飾画像"><strong id="decorationDetailName">画像</strong><span>中央プレビュー上ではドラッグ・拡大縮小もできます。</span></div>
+  <div class="decoration-detail-form">
+    <div class="field-grid two">
+      <label class="field compact"><span>配置ページ</span><input id="decorationPageNumber" type="number" min="1" step="1"></label>
+      <label class="field compact"><span>重なり</span><select id="decorationLayer"><option value="front">本文の前面</option><option value="back">本文の背面</option></select></label>
+      <label class="field compact"><span>左から（mm）</span><input id="decorationX" type="number" min="0" step="0.5"></label>
+      <label class="field compact"><span>上から（mm）</span><input id="decorationY" type="number" min="0" step="0.5"></label>
+      <label class="field compact"><span>幅（mm）</span><input id="decorationWidth" type="number" min="5" step="0.5"></label>
+      <label class="field compact"><span>不透明度（%）</span><input id="decorationOpacity" type="number" min="5" max="100" step="5"></label>
+    </div>
+    <label class="check-row primary-check"><input id="decorationLocked" type="checkbox"><span>配置をロックして誤操作を防ぐ</span></label>
+    <div class="decoration-align-actions"><button class="button modal-secondary" id="decorationCenterHorizontalBtn" type="button">左右中央</button><button class="button modal-secondary" id="decorationCenterVerticalBtn" type="button">上下中央</button><button class="button modal-secondary" id="decorationFitWidthBtn" type="button">ページ幅の50%</button></div>
+    <p class="helper-text">位置と幅は用紙の実寸（mm）で保存されます。用紙サイズを変えても数値は維持されます。</p>
+  </div>
+</div>
+<footer class="decoration-modal-footer"><button class="button modal-secondary" id="decorationModalDuplicateBtn" type="button">複製</button><button class="button danger-outline" id="decorationModalDeleteBtn" type="button">削除</button><button class="button modal-primary" data-close-modal="decorationModal" type="button">確認して閉じる</button></footer>
+</section>
+</div>
 
 <div class="modal-backdrop" hidden id="editingToolsModal">
 <section aria-labelledby="editingToolsModalTitle" aria-modal="true" class="modal-card editing-tools-modal-card" role="dialog">

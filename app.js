@@ -1,11 +1,12 @@
 'use strict';
 
-const APP_VERSION = 'v019.2';
-const SCHEMA_VERSION = 19;
+const APP_VERSION = 'v020';
+const SCHEMA_VERSION = 20;
 const AUTOSAVE_DELAY = 700;
 const MAX_MEDIA_ASSETS = 20;
 const MAX_MEDIA_DATA_CHARS = 3_200_000;
 const MAX_MEDIA_SOURCE_BYTES = 12 * 1024 * 1024;
+const MAX_DECORATIONS = 60;
 const MEDIA_MARKER_PATTERN = /^\s*\[\[figure:([a-zA-Z0-9_-]+)\]\]\s*$/;
 
 const PROJECT_INDEX_KEY = 'typesetting-app-v019-project-index';
@@ -106,9 +107,9 @@ const SAMPLE_MANUSCRIPT = Object.freeze({
   title: 'サンプルタイトル',
   subtitle: '出力前チェック対応の確認用原稿',
   author: '著者名',
-  body: `# 第1章　組版アプリv019.2
+  body: `# 第1章　組版アプリv020
 
-これは、組版アプリv019.2の動作確認用原稿です。用紙設定から「縦書き・右綴じ」へ切り替えると、同じ原稿を縦書きで確認できます。
+これは、組版アプリv020の動作確認用原稿です。用紙設定から「縦書き・右綴じ」へ切り替えると、同じ原稿を縦書きで確認できます。
 
 文字を選択して、**太字**、《《傍点》》、｜組版《くみはん》、__下線__を設定できます。記号はプレビューやPDFには表示されません。
 
@@ -146,8 +147,8 @@ const DEFAULT_BOOK_MATTER = Object.freeze({
 });
 
 const DEFAULT_STATE = Object.freeze({
-  projectName: '組版アプリ v019.2 サンプル',
-  manuscript: { ...SAMPLE_MANUSCRIPT, paragraphs: [], chapters: [], media: [], matter: deepClone(DEFAULT_BOOK_MATTER) },
+  projectName: '組版アプリ v020 サンプル',
+  manuscript: { ...SAMPLE_MANUSCRIPT, paragraphs: [], chapters: [], media: [], decorations: [], matter: deepClone(DEFAULT_BOOK_MATTER) },
   paragraphOverrides: {},
   settings: DEFAULT_SETTINGS,
   metadata: {
@@ -233,6 +234,9 @@ let manuscriptIssues = [];
 let manuscriptCheckFilter = 'all';
 let manuscriptCheckTimer = null;
 let mediaAssets = [];
+let decorativeItems = [];
+let selectedDecorationId = null;
+let decorationGesture = null;
 let mediaInsertTarget = 'bodyInput';
 let selectedMediaId = null;
 let preflightIssues = [];
@@ -274,6 +278,7 @@ function init() {
   updateJapaneseTypesettingControls();
   updateDocumentLayoutControls();
   updateMediaUi();
+  updateDecorationUi();
   updateBookStructureUi();
   scheduleManuscriptCheck(0);
   schedulePreflightCheck(350);
@@ -331,7 +336,13 @@ function cacheElements() {
     'pdfExportOverlay', 'pdfExportStatus', 'pdfExportProgress',
     'mediaManagerBtn', 'mediaCountBadge', 'mediaModal', 'mediaFileInput',
     'mediaStorageSummary', 'mediaStorageProgress', 'mediaTargetNote',
-    'mediaLibraryList', 'mediaEmptyState',
+    'mediaLibraryList', 'mediaEmptyState', 'decorationLibraryList', 'decorationEmptyState', 'decorationCountSummary',
+    'decorationSelectionBar', 'selectedDecorationName', 'selectedDecorationMeta', 'decorationLockBtn',
+    'decorationLayerBtn', 'decorationDuplicateBtn', 'decorationDetailsBtn', 'decorationDeleteBtn',
+    'decorationModal', 'decorationDetailImage', 'decorationDetailName', 'decorationPageNumber',
+    'decorationLayer', 'decorationX', 'decorationY', 'decorationWidth', 'decorationOpacity',
+    'decorationLocked', 'decorationCenterHorizontalBtn', 'decorationCenterVerticalBtn',
+    'decorationFitWidthBtn', 'decorationModalDuplicateBtn', 'decorationModalDeleteBtn',
     'bookStructureBtn', 'bookStructureBadge', 'bookStructureModal', 'bookStructureSummary',
     'bookStructureFlow', 'fillColophonFromBookInfoBtn',
     'forewordEnabled', 'forewordTitle', 'forewordPlacement', 'forewordBody', 'forewordStatus',
@@ -443,6 +454,22 @@ function bindEvents() {
   els.mediaLibraryList.addEventListener('input', handleMediaLibraryInput);
   els.mediaLibraryList.addEventListener('change', handleMediaLibraryInput);
   els.mediaLibraryList.addEventListener('click', handleMediaLibraryClick);
+  els.decorationLibraryList.addEventListener('click', handleDecorationLibraryClick);
+  els.decorationSelectionBar.addEventListener('click', handleDecorationSelectionBarClick);
+  els.decorationDetailsBtn.addEventListener('click', openDecorationDetails);
+  els.decorationLockBtn.addEventListener('click', toggleSelectedDecorationLock);
+  els.decorationLayerBtn.addEventListener('click', toggleSelectedDecorationLayer);
+  els.decorationDuplicateBtn.addEventListener('click', duplicateSelectedDecoration);
+  els.decorationDeleteBtn.addEventListener('click', deleteSelectedDecoration);
+  [els.decorationPageNumber, els.decorationLayer, els.decorationX, els.decorationY, els.decorationWidth, els.decorationOpacity, els.decorationLocked].forEach((input) => {
+    const eventName = input.matches('select, input[type="checkbox"]') ? 'change' : 'input';
+    input.addEventListener(eventName, updateSelectedDecorationFromForm);
+  });
+  els.decorationCenterHorizontalBtn.addEventListener('click', () => alignSelectedDecoration('horizontal'));
+  els.decorationCenterVerticalBtn.addEventListener('click', () => alignSelectedDecoration('vertical'));
+  els.decorationFitWidthBtn.addEventListener('click', () => fitSelectedDecorationWidth(.5));
+  els.decorationModalDuplicateBtn.addEventListener('click', duplicateSelectedDecoration);
+  els.decorationModalDeleteBtn.addEventListener('click', deleteSelectedDecoration);
   els.chapterList.addEventListener('click', handleChapterListClick);
   els.addChapterBtn.addEventListener('click', addChapter);
   els.addFirstChapterBtn.addEventListener('click', addChapter);
@@ -487,7 +514,14 @@ function bindEvents() {
     scheduleAutosave();
   });
 
+  els.pages.addEventListener('pointerdown', handleDecorationPointerDown);
   els.pages.addEventListener('click', (event) => {
+    const decoration = event.target.closest('.decoration-item[data-decoration-id]');
+    if (decoration) {
+      selectDecoration(decoration.dataset.decorationId, { openDetails: false });
+      return;
+    }
+    if (event.target.closest('.paper') && !event.target.closest('.decoration-selection-bar')) clearDecorationSelection();
     const figure = event.target.closest('.figure-block[data-media-id]');
     if (figure) {
       selectedMediaId = figure.dataset.mediaId || null;
@@ -2978,8 +3012,10 @@ function buildPreview(pageFragments, settings, manuscript) {
       }
     });
 
-    appendRunningElements(paper, index, settings, manuscript, pageChapter);
+    appendDecorationsToPaper(paper, index + 1, settings, manuscript, 'back');
     paper.appendChild(content);
+    appendRunningElements(paper, index, settings, manuscript, pageChapter);
+    appendDecorationsToPaper(paper, index + 1, settings, manuscript, 'front');
     els.pages.appendChild(paper);
   });
 }
@@ -3361,6 +3397,7 @@ function collectState() {
       paragraphs: deepClone(paragraphRecords),
       chapters: serializeChapterModel(),
       media: deepClone(mediaAssets),
+      decorations: deepClone(decorativeItems),
       matter: collectBookMatter(),
       trailingBlankLines
     },
@@ -3473,8 +3510,11 @@ function applyState(state) {
     trailingBlankLines = sanitizeBlankLineCount(normalized.manuscript.trailingBlankLines);
     paragraphOverrides = deepClone(normalized.paragraphOverrides);
     mediaAssets = deepClone(normalized.manuscript.media || []);
+    decorativeItems = deepClone(normalized.manuscript.decorations || []);
     selectedMediaId = null;
+    selectedDecorationId = null;
     updateMediaUi();
+    updateDecorationUi();
     applyBookMatterToInputs(normalized.manuscript.matter);
     updateBookStructureUi();
     selectedParagraphId = null;
@@ -3580,6 +3620,7 @@ function normalizeState(raw) {
   manuscript.author = String(manuscript.author || '');
   manuscript.body = String(manuscript.body || '');
   manuscript.media = normalizeMediaAssets(manuscriptSource.media);
+  manuscript.decorations = normalizeDecorations(manuscriptSource.decorations, manuscript.media);
   manuscript.matter = normalizeBookMatter(manuscriptSource.matter);
   if (!manuscript.body && Array.isArray(manuscriptSource.chapters)) {
     manuscript.body = buildBodyFromChapters(manuscriptSource.chapters);
@@ -4784,6 +4825,9 @@ function preparePaperCloneForPdf(sourcePaper) {
   clone.querySelectorAll('.selected-paragraph, .has-override').forEach((element) => {
     element.classList.remove('selected-paragraph', 'has-override');
   });
+  clone.querySelectorAll('.decoration-item').forEach((element) => element.classList.remove('selected'));
+  clone.querySelectorAll('.decoration-layer').forEach((element) => element.classList.remove('has-selected'));
+  clone.querySelectorAll('.decoration-resize-handle, .decoration-lock-mark').forEach((element) => element.remove());
   return clone;
 }
 
@@ -5049,6 +5093,295 @@ function updateBookStructureUi() {
   els.bookStructureSummary.textContent = `${items.length}区分 ／ 追加ページ ${optionalCount}種類`;
 }
 
+
+function normalizeDecorations(raw, assets = mediaAssets) {
+  if (!Array.isArray(raw)) return [];
+  const validMedia = new Set((assets || []).map((asset) => asset.id));
+  return raw.slice(0, MAX_DECORATIONS).map((item) => ({
+    id: String(item?.id || createId('decoration')),
+    mediaId: String(item?.mediaId || ''),
+    pageNumber: Math.max(1, Math.trunc(sanitizeNumber(item?.pageNumber, 1))),
+    xMm: Math.max(0, sanitizeNumber(item?.xMm, 10)),
+    yMm: Math.max(0, sanitizeNumber(item?.yMm, 10)),
+    widthMm: Math.max(5, sanitizeNumber(item?.widthMm, 35)),
+    opacity: Math.max(.05, Math.min(1, sanitizeNumber(item?.opacity, 1))),
+    layer: item?.layer === 'back' ? 'back' : 'front',
+    locked: Boolean(item?.locked),
+    createdAt: String(item?.createdAt || new Date().toISOString())
+  })).filter((item) => item.mediaId && (!validMedia.size || validMedia.has(item.mediaId)));
+}
+
+function findDecoration(id) {
+  return decorativeItems.find((item) => item.id === id) || null;
+}
+
+function getDecorationAsset(item) {
+  return item ? findMediaAsset(item.mediaId) : null;
+}
+
+function createDecorationFromMedia(mediaId) {
+  const asset = findMediaAsset(mediaId);
+  if (!asset) return;
+  if (decorativeItems.length >= MAX_DECORATIONS) {
+    showToast(`装飾画像は1プロジェクト${MAX_DECORATIONS}点までです。`);
+    return;
+  }
+  const settings = collectSettings();
+  const pageWidth = Math.max(20, sanitizeNumber(settings.pageWidth, 148));
+  const pageHeight = Math.max(20, sanitizeNumber(settings.pageHeight, 210));
+  const widthMm = Math.min(50, Math.max(22, pageWidth * .28));
+  const heightMm = widthMm * (asset.height / Math.max(1, asset.width));
+  const item = {
+    id: createId('decoration'), mediaId, pageNumber: currentPreviewPage,
+    xMm: Math.max(0, (pageWidth - widthMm) / 2),
+    yMm: Math.max(0, (pageHeight - heightMm) / 2),
+    widthMm, opacity: 1, layer: 'front', locked: false,
+    createdAt: new Date().toISOString()
+  };
+  decorativeItems.push(item);
+  selectedDecorationId = item.id;
+  closeModal('mediaModal');
+  markDirty(); scheduleRender(); scheduleAutosave(); updateDecorationUi();
+  setTimeout(() => { jumpToPage(item.pageNumber); openDecorationDetails(); }, 180);
+  showToast(`「${asset.fileName}」を${item.pageNumber}ページへ装飾配置しました。`);
+}
+
+function appendDecorationsToPaper(paper, pageNumber, settings, manuscript, layer) {
+  const source = Array.isArray(manuscript?.decorations) ? manuscript.decorations : [];
+  const items = source.filter((item) => Number(item.pageNumber) === pageNumber && item.layer === layer);
+  if (!items.length) return;
+  const wrap = document.createElement('div');
+  wrap.className = `decoration-layer decoration-layer-${layer}`;
+  if (items.some((item) => item.id === selectedDecorationId)) wrap.classList.add('has-selected');
+  wrap.dataset.layer = layer;
+  items.forEach((item) => {
+    const asset = findMediaAsset(item.mediaId, manuscript.media);
+    if (!asset?.dataUrl) return;
+    const figure = document.createElement('figure');
+    figure.className = `decoration-item ${item.locked ? 'locked' : ''} ${item.id === selectedDecorationId ? 'selected' : ''}`;
+    figure.dataset.decorationId = item.id;
+    figure.dataset.page = String(pageNumber);
+    figure.style.left = `${item.xMm}mm`;
+    figure.style.top = `${item.yMm}mm`;
+    figure.style.width = `${item.widthMm}mm`;
+    figure.style.opacity = String(item.opacity);
+    const image = document.createElement('img');
+    image.src = asset.dataUrl;
+    image.alt = asset.alt || asset.fileName || '装飾画像';
+    image.draggable = false;
+    figure.appendChild(image);
+    if (item.locked) {
+      const lock = document.createElement('span');
+      lock.className = 'decoration-lock-mark'; lock.textContent = '固定';
+      figure.appendChild(lock);
+    } else {
+      const handle = document.createElement('span');
+      handle.className = 'decoration-resize-handle';
+      handle.dataset.decorationResize = 'true';
+      handle.setAttribute('aria-label', '装飾画像を拡大縮小');
+      figure.appendChild(handle);
+    }
+    wrap.appendChild(figure);
+  });
+  paper.appendChild(wrap);
+}
+
+function selectDecoration(id, options = {}) {
+  if (!findDecoration(id)) return;
+  selectedDecorationId = id;
+  els.pages.querySelectorAll('.decoration-item').forEach((element) => element.classList.toggle('selected', element.dataset.decorationId === id));
+  updateDecorationUi();
+  if (options.openDetails) openDecorationDetails();
+}
+
+function clearDecorationSelection() {
+  if (!selectedDecorationId) return;
+  selectedDecorationId = null;
+  els.pages.querySelectorAll('.decoration-item').forEach((element) => element.classList.remove('selected'));
+  updateDecorationUi();
+}
+
+function updateDecorationUi() {
+  const item = findDecoration(selectedDecorationId);
+  if (els.decorationSelectionBar) els.decorationSelectionBar.hidden = !item;
+  if (els.decorationCountSummary) els.decorationCountSummary.textContent = `${decorativeItems.length}点`;
+  if (els.decorationEmptyState) els.decorationEmptyState.hidden = decorativeItems.length > 0;
+  if (!item) return;
+  const asset = getDecorationAsset(item);
+  els.selectedDecorationName.textContent = asset?.fileName || '装飾画像';
+  els.selectedDecorationMeta.textContent = `${item.pageNumber}ページ・${item.layer === 'front' ? '前面' : '背面'}・幅${roundOne(item.widthMm)}mm`;
+  els.decorationLockBtn.textContent = item.locked ? 'ロック解除' : 'ロック';
+  els.decorationLayerBtn.textContent = item.layer === 'front' ? '背面へ' : '前面へ';
+}
+
+function renderDecorationLibrary() {
+  if (!els.decorationLibraryList) return;
+  els.decorationLibraryList.replaceChildren();
+  decorativeItems.forEach((item) => {
+    const asset = getDecorationAsset(item);
+    if (!asset) return;
+    const row = document.createElement('article');
+    row.className = `decoration-library-row ${item.id === selectedDecorationId ? 'selected' : ''}`;
+    row.dataset.decorationId = item.id;
+    const thumb = document.createElement('img'); thumb.src = asset.dataUrl; thumb.alt = asset.alt || asset.fileName;
+    const copy = document.createElement('div');
+    const title = document.createElement('strong'); title.textContent = asset.fileName;
+    const meta = document.createElement('span'); meta.textContent = `${item.pageNumber}ページ ／ ${item.layer === 'front' ? '前面' : '背面'} ／ 幅${roundOne(item.widthMm)}mm${item.locked ? ' ／ ロック中' : ''}`;
+    copy.append(title, meta);
+    const actions = document.createElement('div');
+    const select = document.createElement('button'); select.type='button'; select.className='button small modal-secondary'; select.dataset.decorationAction='select'; select.dataset.decorationId=item.id; select.textContent='誌面で選択';
+    const detail = document.createElement('button'); detail.type='button'; detail.className='button small decoration-insert-button'; detail.dataset.decorationAction='detail'; detail.dataset.decorationId=item.id; detail.textContent='調整';
+    actions.append(select, detail);
+    row.append(thumb, copy, actions);
+    els.decorationLibraryList.appendChild(row);
+  });
+  updateDecorationUi();
+}
+
+function handleDecorationLibraryClick(event) {
+  const button = event.target.closest('[data-decoration-action]');
+  if (!button) return;
+  const item = findDecoration(button.dataset.decorationId);
+  if (!item) return;
+  selectedDecorationId = item.id;
+  closeModal('mediaModal');
+  jumpToPage(item.pageNumber);
+  if (button.dataset.decorationAction === 'detail') setTimeout(openDecorationDetails, 170);
+  else { updateDecorationUi(); setTimeout(() => els.pages.querySelector(`[data-decoration-id="${CSS.escape(item.id)}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 220); }
+}
+
+function handleDecorationSelectionBarClick(event) {
+  if (event.target.closest('button')) return;
+  openDecorationDetails();
+}
+
+function openDecorationDetails() {
+  const item = findDecoration(selectedDecorationId);
+  if (!item) { showToast('調整する装飾画像を選択してください。'); return; }
+  const asset = getDecorationAsset(item);
+  const total = Math.max(1, els.pages.querySelectorAll('.paper').length);
+  els.decorationDetailImage.src = asset?.dataUrl || '';
+  els.decorationDetailImage.alt = asset?.alt || asset?.fileName || '装飾画像';
+  els.decorationDetailName.textContent = asset?.fileName || '装飾画像';
+  els.decorationPageNumber.max = String(total);
+  els.decorationPageNumber.value = String(Math.min(total, item.pageNumber));
+  els.decorationLayer.value = item.layer;
+  els.decorationX.value = roundOne(item.xMm);
+  els.decorationY.value = roundOne(item.yMm);
+  els.decorationWidth.value = roundOne(item.widthMm);
+  els.decorationOpacity.value = String(Math.round(item.opacity * 100));
+  els.decorationLocked.checked = item.locked;
+  openModal('decorationModal');
+}
+
+function updateSelectedDecorationFromForm() {
+  const item = findDecoration(selectedDecorationId);
+  if (!item || isApplyingState) return;
+  const settings = collectSettings();
+  const total = Math.max(1, els.pages.querySelectorAll('.paper').length);
+  item.pageNumber = Math.max(1, Math.min(total, Math.trunc(sanitizeNumber(els.decorationPageNumber.value, item.pageNumber))));
+  item.layer = els.decorationLayer.value === 'back' ? 'back' : 'front';
+  item.widthMm = Math.max(5, Math.min(settings.pageWidth, sanitizeNumber(els.decorationWidth.value, item.widthMm)));
+  const asset = getDecorationAsset(item);
+  const heightMm = item.widthMm * ((asset?.height || 1) / Math.max(1, asset?.width || 1));
+  item.xMm = Math.max(0, Math.min(settings.pageWidth - item.widthMm, sanitizeNumber(els.decorationX.value, item.xMm)));
+  item.yMm = Math.max(0, Math.min(settings.pageHeight - heightMm, sanitizeNumber(els.decorationY.value, item.yMm)));
+  item.opacity = Math.max(.05, Math.min(1, sanitizeNumber(els.decorationOpacity.value, 100) / 100));
+  item.locked = Boolean(els.decorationLocked.checked);
+  markDirty(); scheduleRender(); scheduleAutosave(); updateDecorationUi();
+}
+
+function alignSelectedDecoration(axis) {
+  const item = findDecoration(selectedDecorationId); if (!item) return;
+  const settings = collectSettings(); const asset = getDecorationAsset(item);
+  const height = item.widthMm * ((asset?.height || 1) / Math.max(1, asset?.width || 1));
+  if (axis === 'horizontal') item.xMm = Math.max(0, (settings.pageWidth - item.widthMm) / 2);
+  if (axis === 'vertical') item.yMm = Math.max(0, (settings.pageHeight - height) / 2);
+  openDecorationDetails(); markDirty(); scheduleRender(); scheduleAutosave();
+}
+
+function fitSelectedDecorationWidth(ratio) {
+  const item = findDecoration(selectedDecorationId); if (!item) return;
+  const settings = collectSettings(); const asset = getDecorationAsset(item);
+  item.widthMm = Math.max(5, settings.pageWidth * ratio);
+  const height = item.widthMm * ((asset?.height || 1) / Math.max(1, asset?.width || 1));
+  item.xMm = (settings.pageWidth - item.widthMm) / 2;
+  item.yMm = Math.max(0, Math.min(settings.pageHeight - height, item.yMm));
+  openDecorationDetails(); markDirty(); scheduleRender(); scheduleAutosave();
+}
+
+function toggleSelectedDecorationLock() {
+  const item = findDecoration(selectedDecorationId); if (!item) return;
+  item.locked = !item.locked; markDirty(); scheduleRender(); scheduleAutosave(); updateDecorationUi();
+}
+
+function toggleSelectedDecorationLayer() {
+  const item = findDecoration(selectedDecorationId); if (!item) return;
+  item.layer = item.layer === 'front' ? 'back' : 'front'; markDirty(); scheduleRender(); scheduleAutosave(); updateDecorationUi();
+}
+
+function duplicateSelectedDecoration() {
+  const item = findDecoration(selectedDecorationId); if (!item) return;
+  if (decorativeItems.length >= MAX_DECORATIONS) { showToast(`装飾画像は${MAX_DECORATIONS}点までです。`); return; }
+  const settings = collectSettings();
+  const asset = getDecorationAsset(item);
+  const height = item.widthMm * ((asset?.height || 1) / Math.max(1, asset?.width || 1));
+  const copy = { ...deepClone(item), id: createId('decoration'), xMm: Math.max(0, Math.min(settings.pageWidth - item.widthMm, item.xMm + 5)), yMm: Math.max(0, Math.min(settings.pageHeight - height, item.yMm + 5)), locked: false, createdAt: new Date().toISOString() };
+  decorativeItems.push(copy); selectedDecorationId = copy.id;
+  closeModal('decorationModal'); markDirty(); scheduleRender(); scheduleAutosave(); updateDecorationUi();
+  showToast('装飾画像を複製しました。');
+}
+
+function deleteSelectedDecoration() {
+  const item = findDecoration(selectedDecorationId); if (!item) return;
+  const asset = getDecorationAsset(item);
+  if (!window.confirm(`「${asset?.fileName || '装飾画像'}」の配置を削除しますか？画像素材自体は残ります。`)) return;
+  decorativeItems = decorativeItems.filter((entry) => entry.id !== item.id);
+  selectedDecorationId = null;
+  closeModal('decorationModal'); markDirty(); scheduleRender(); scheduleAutosave(); updateDecorationUi(); renderDecorationLibrary();
+}
+
+function handleDecorationPointerDown(event) {
+  const element = event.target.closest('.decoration-item[data-decoration-id]');
+  if (!element) return;
+  const item = findDecoration(element.dataset.decorationId); if (!item) return;
+  event.preventDefault(); event.stopPropagation();
+  selectDecoration(item.id, { openDetails: false });
+  if (item.locked) { showToast('この装飾画像はロックされています。'); return; }
+  const paper = element.closest('.paper'); if (!paper) return;
+  const settings = collectSettings(); const rect = paper.getBoundingClientRect();
+  decorationGesture = { id:item.id, mode:event.target.closest('[data-decoration-resize]') ? 'resize' : 'move', startX:event.clientX, startY:event.clientY, originalX:item.xMm, originalY:item.yMm, originalWidth:item.widthMm, paperRect:rect, pageWidth:settings.pageWidth, pageHeight:settings.pageHeight, pointerId:event.pointerId };
+  element.setPointerCapture?.(event.pointerId);
+  window.addEventListener('pointermove', handleDecorationPointerMove);
+  window.addEventListener('pointerup', handleDecorationPointerUp, { once:true });
+}
+
+function handleDecorationPointerMove(event) {
+  const gesture = decorationGesture; if (!gesture) return;
+  const item = findDecoration(gesture.id); if (!item) return;
+  const asset = getDecorationAsset(item);
+  const dx = (event.clientX - gesture.startX) / Math.max(1, gesture.paperRect.width) * gesture.pageWidth;
+  const dy = (event.clientY - gesture.startY) / Math.max(1, gesture.paperRect.height) * gesture.pageHeight;
+  if (gesture.mode === 'resize') {
+    item.widthMm = Math.max(5, Math.min(gesture.pageWidth - item.xMm, gesture.originalWidth + dx));
+  } else {
+    const height = item.widthMm * ((asset?.height || 1) / Math.max(1, asset?.width || 1));
+    item.xMm = Math.max(0, Math.min(gesture.pageWidth - item.widthMm, gesture.originalX + dx));
+    item.yMm = Math.max(0, Math.min(gesture.pageHeight - height, gesture.originalY + dy));
+  }
+  const element = els.pages.querySelector(`[data-decoration-id="${CSS.escape(item.id)}"]`);
+  if (element) { element.style.left=`${item.xMm}mm`; element.style.top=`${item.yMm}mm`; element.style.width=`${item.widthMm}mm`; }
+  updateDecorationUi();
+}
+
+function handleDecorationPointerUp() {
+  if (!decorationGesture) return;
+  decorationGesture = null; window.removeEventListener('pointermove', handleDecorationPointerMove);
+  markDirty(); scheduleRender(); scheduleAutosave();
+}
+
+function roundOne(value) { return Math.round(Number(value || 0) * 10) / 10; }
+
 function normalizeMediaAssets(raw) {
   if (!Array.isArray(raw)) return [];
   return raw.slice(0, MAX_MEDIA_ASSETS).map((asset) => ({
@@ -5081,7 +5414,7 @@ function mediaDataCharCount() {
 
 function updateMediaUi() {
   const count = mediaAssets.length;
-  if (els.mediaCountBadge) els.mediaCountBadge.textContent = String(count);
+  if (els.mediaCountBadge) els.mediaCountBadge.textContent = decorativeItems.length ? `${count}＋${decorativeItems.length}` : String(count);
   if (!els.mediaStorageSummary || !els.mediaStorageProgress) return;
   const chars = mediaDataCharCount();
   const approximateBytes = Math.round(chars * .75);
@@ -5098,7 +5431,9 @@ function openMediaManager(targetId = 'bodyInput', mediaId = null) {
     ? '現在選択中の章本文のカーソル位置へ挿入します。'
     : '全文編集のカーソル位置へ挿入します。';
   renderMediaLibrary();
+  renderDecorationLibrary();
   updateMediaUi();
+  updateDecorationUi();
   openModal('mediaModal');
   if (selectedMediaId) {
     requestAnimationFrame(() => els.mediaLibraryList.querySelector(`[data-media-card-id="${CSS.escape(selectedMediaId)}"]`)?.scrollIntoView({ block: 'center' }));
@@ -5155,7 +5490,9 @@ async function handleMediaFilesSelected(event) {
     }
   }
   renderMediaLibrary();
+  renderDecorationLibrary();
   updateMediaUi();
+  updateDecorationUi();
   markDirty();
   scheduleAutosave();
 }
@@ -5247,13 +5584,16 @@ function renderMediaLibrary() {
     const insert = document.createElement('button');
     insert.type = 'button'; insert.className = 'button small media-insert-button';
     insert.dataset.mediaAction = 'insert'; insert.dataset.mediaId = asset.id; insert.textContent = '本文へ挿入';
+    const decorate = document.createElement('button');
+    decorate.type = 'button'; decorate.className = 'button small decoration-insert-button';
+    decorate.dataset.mediaAction = 'decorate'; decorate.dataset.mediaId = asset.id; decorate.textContent = '装飾として配置';
     const locate = document.createElement('button');
     locate.type = 'button'; locate.className = 'button small modal-secondary';
-    locate.dataset.mediaAction = 'locate'; locate.dataset.mediaId = asset.id; locate.textContent = '挿入位置を確認';
+    locate.dataset.mediaAction = 'locate'; locate.dataset.mediaId = asset.id; locate.textContent = '本文位置を確認';
     const remove = document.createElement('button');
     remove.type = 'button'; remove.className = 'button small media-delete-button';
     remove.dataset.mediaAction = 'delete'; remove.dataset.mediaId = asset.id; remove.textContent = '削除';
-    actions.append(insert, locate, remove);
+    actions.append(insert, decorate, locate, remove);
     fields.append(heading, grid, actions);
     card.append(preview, fields);
     els.mediaLibraryList.appendChild(card);
@@ -5281,6 +5621,7 @@ function handleMediaLibraryClick(event) {
   if (!button) return;
   const mediaId = button.dataset.mediaId;
   if (button.dataset.mediaAction === 'insert') insertMediaMarker(mediaId);
+  if (button.dataset.mediaAction === 'decorate') createDecorationFromMedia(mediaId);
   if (button.dataset.mediaAction === 'locate') locateMediaMarker(mediaId);
   if (button.dataset.mediaAction === 'delete') deleteMediaAsset(mediaId);
 }
@@ -5324,11 +5665,15 @@ function deleteMediaAsset(mediaId) {
   if (!asset) return;
   const marker = `[[figure:${mediaId}]]`;
   const occurrences = els.bodyInput.value.split(marker).length - 1;
-  const message = occurrences
-    ? `「${asset.fileName}」を削除しますか？本文内の挿入位置${occurrences}件も削除されます。`
+  const decorationOccurrences = decorativeItems.filter((item) => item.mediaId === mediaId).length;
+  const related = [occurrences ? `本文内${occurrences}件` : '', decorationOccurrences ? `装飾配置${decorationOccurrences}件` : ''].filter(Boolean).join('・');
+  const message = related
+    ? `「${asset.fileName}」を削除しますか？${related}も同時に削除されます。`
     : `「${asset.fileName}」を削除しますか？`;
   if (!window.confirm(message)) return;
   mediaAssets = mediaAssets.filter((item) => item.id !== mediaId);
+  decorativeItems = decorativeItems.filter((item) => item.mediaId !== mediaId);
+  if (selectedDecorationId && !decorativeItems.some((item) => item.id === selectedDecorationId)) selectedDecorationId = null;
   els.bodyInput.value = els.bodyInput.value.replace(new RegExp(`(?:\\n)?\\[\\[figure:${escapeRegExp(mediaId)}\\]\\](?:\\n)?`, 'g'), '\n');
   syncParagraphRecordsFromBody();
   refreshChapterModelFromBody({ preserveSelection: true });
@@ -5655,6 +6000,7 @@ function captureHistorySnapshot() {
       paragraphs: deepClone(state.manuscript.paragraphs || []),
       chapters: deepClone(state.manuscript.chapters || []),
       media,
+      decorations: deepClone(state.manuscript.decorations || []),
       matter: deepClone(state.manuscript.matter || DEFAULT_BOOK_MATTER),
       trailingBlankLines: state.manuscript.trailingBlankLines || 0
     },
