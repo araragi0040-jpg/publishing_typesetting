@@ -122,13 +122,14 @@
       <div class="inline-format-toolbar" data-format-target="bodyInput" aria-label="文字装飾">
         <div class="inline-format-copy">
           <strong>文字装飾</strong>
-          <span>文字を選択して適用</span>
+          <span>文字を選択して装飾／「……」は挿入</span>
         </div>
         <div class="inline-format-actions">
           <button class="format-action" data-inline-format="bold" type="button" title="選択した文字を太字にする"><b>B</b><span>太字</span></button>
           <button class="format-action" data-inline-format="emphasis" type="button" title="選択した文字に傍点を付ける"><span class="format-symbol emphasis-symbol">﹅</span><span>傍点</span></button>
           <button class="format-action" data-inline-format="ruby" type="button" title="選択した文字にルビを付ける"><span class="format-symbol ruby-symbol">ル</span><span>ルビ</span></button>
           <button class="format-action" data-inline-format="underline" type="button" title="選択した文字に下線を付ける"><u>U</u><span>下線</span></button>
+          <button class="format-action" data-inline-format="ellipsis" type="button" title="カーソル位置へ三点リーダー「……」を挿入"><span class="format-symbol ellipsis-symbol">……</span><span>三点リーダー</span></button>
           <button class="format-action subtle" data-inline-format="clear" type="button" title="選択範囲の装飾を解除"><span class="format-symbol">×</span><span>解除</span></button>
           <button class="format-action media-insert-action" data-media-target="bodyInput" type="button" title="カーソル位置へ画像を挿入"><span class="format-symbol">▧</span><span>画像</span></button>
         </div>
@@ -229,13 +230,14 @@
           <div class="inline-format-toolbar chapter-format-toolbar" data-format-target="chapterBodyInput" aria-label="章本文の文字装飾">
             <div class="inline-format-copy">
               <strong>文字装飾</strong>
-              <span>本文内の文字を選択</span>
+              <span>文字を選択して装飾／「……」は挿入</span>
             </div>
             <div class="inline-format-actions">
               <button class="format-action" data-inline-format="bold" type="button"><b>B</b><span>太字</span></button>
               <button class="format-action" data-inline-format="emphasis" type="button"><span class="format-symbol emphasis-symbol">﹅</span><span>傍点</span></button>
               <button class="format-action" data-inline-format="ruby" type="button"><span class="format-symbol ruby-symbol">ル</span><span>ルビ</span></button>
               <button class="format-action" data-inline-format="underline" type="button"><u>U</u><span>下線</span></button>
+              <button class="format-action" data-inline-format="ellipsis" type="button" title="カーソル位置へ三点リーダー「……」を挿入"><span class="format-symbol ellipsis-symbol">……</span><span>三点リーダー</span></button>
               <button class="format-action subtle" data-inline-format="clear" type="button"><span class="format-symbol">×</span><span>解除</span></button>
               <button class="format-action media-insert-action" data-media-target="chapterBodyInput" type="button"><span class="format-symbol">▧</span><span>画像</span></button>
             </div>
@@ -374,7 +376,7 @@
 </select>
 </label>
 <label class="field">
-<span>段落先頭の字下げ</span>
+<span>改行先頭の字下げ</span>
 <select id="paragraphTextIndent">
 <option value="inherit">本文全体の設定</option>
 <option value="1">1文字下げる</option>
@@ -458,9 +460,9 @@
 </label>
 <label class="check-row">
 <input checked="" id="useTextIndent" type="checkbox"/>
-<span>段落先頭を字下げする</span>
+<span>改行先頭を字下げする</span>
 </label>
-<p class="helper-text">オフにすると本文全体を字下げなしにします。段落ごとに1文字／なしを上書きできます。</p>
+<p class="helper-text">段落の先頭と、本文内で改行した行の先頭を字下げします。「」などの記号から始まる行は自動で字下げしません。</p>
 <div class="field-grid two">
 <label class="field compact">
 <span>文字サイズ（pt）</span>
@@ -475,7 +477,7 @@
 <input id="letterSpacing" max="1" min="-0.2" step="0.01" type="number" value="0.02"/>
 </label>
 <label class="field compact">
-<span>字下げ量（文字）</span>
+<span>改行先頭の字下げ量（文字）</span>
 <input id="textIndent" max="10" min="0" step="0.5" type="number" value="1"/>
 </label>
 </div>

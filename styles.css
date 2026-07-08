@@ -410,7 +410,7 @@ h2 {
 
 .body-paragraph {
   margin: 0;
-  text-indent: var(--body-indent);
+  text-indent: 0;
   white-space: pre-wrap;
 }
 
@@ -1191,13 +1191,15 @@ body.modal-open {
   right: var(--page-margin-right);
   left: var(--page-margin-left);
   z-index: 2;
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  display: flex;
   align-items: center;
   color: #424b52;
   font-family: var(--body-font);
   font-size: 7.5pt;
   line-height: 1.25;
+  writing-mode: horizontal-tb !important;
+  text-orientation: mixed !important;
+  direction: ltr;
   pointer-events: none;
 }
 
@@ -1213,10 +1215,14 @@ body.modal-open {
 
 .page-margin-slot {
   display: flex;
+  flex: 1 1 33.333%;
+  width: 33.333%;
   align-items: center;
   min-width: 0;
   gap: 2.5mm;
   white-space: nowrap;
+  writing-mode: horizontal-tb !important;
+  text-orientation: mixed !important;
 }
 
 .slot-left { justify-content: flex-start; text-align: left; }
@@ -2328,7 +2334,7 @@ body.pdf-exporting {
 .document-heading { margin:0; margin-block-end:var(--title-bottom); }
 .body-heading.heading-level-1 { border-bottom:0; border-block-end:.35mm solid currentColor; }
 .body-heading.heading-level-2 { border-left:0; padding-left:0; border-inline-start:1.2mm solid currentColor; padding-inline-start:3mm; }
-.page-content.writing-vertical { overflow-wrap:normal; word-break:normal; font-feature-settings:"vert" 1,"vrt2" 1,"palt" 1; }
+.page-content.writing-vertical { overflow-wrap:normal; word-break:normal; font-feature-settings:"vert" 1,"vrt2" 1; font-kerning:normal; }
 .page-content.writing-vertical .document-heading { margin-block-end:var(--title-bottom); min-height:100%; }
 .page-content.writing-vertical .doc-title,.page-content.writing-vertical .doc-subtitle,.page-content.writing-vertical .doc-author { margin-block:0; }
 .page-content.writing-vertical .doc-subtitle { margin-block-start:4mm; margin-inline-start:0; }
@@ -2344,7 +2350,44 @@ body.pdf-exporting {
 .page-content.writing-vertical .toc-level-2 { padding-left:0; padding-block-start:1.5em; }
 .page-content.writing-vertical .toc-level-3 { padding-left:0; padding-block-start:3em; }
 .page-content.writing-vertical .toc-empty-message { margin:0; margin-block-start:4mm; }
-.tate-chu-yoko { display:inline-block; text-combine-upright:all; text-orientation:mixed; letter-spacing:0; line-height:1; }
+.tate-chu-yoko {
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  inline-size:1em;
+  block-size:1em;
+  writing-mode:horizontal-tb !important;
+  text-orientation:mixed !important;
+  text-combine-upright:none;
+  font-feature-settings:normal;
+  letter-spacing:0;
+  line-height:1;
+  white-space:nowrap;
+  vertical-align:middle;
+}
+.tate-chu-yoko.digits-2 { font-size:.82em; inline-size:1.22em; block-size:1.22em; }
+.tate-chu-yoko.digits-3 { font-size:.68em; inline-size:1.47em; block-size:1.47em; }
+.vertical-latin-run {
+  font-feature-settings:normal;
+  font-kerning:normal;
+  unicode-bidi:isolate;
+}
+.vertical-latin-run.latin-sideways { text-orientation:sideways; }
+.vertical-latin-run.latin-upright { text-orientation:upright; }
+.vertical-ellipsis {
+  text-orientation:upright;
+  font-feature-settings:"vert" 1,"vrt2" 1;
+  font-kerning:none;
+  letter-spacing:0;
+}
+.manual-line-indent {
+  display:inline-block;
+  inline-size:var(--line-indent, 1em);
+  block-size:1em;
+  line-height:1;
+  pointer-events:none;
+}
+
 .pdf-export-stage .paper.writing-vertical,.pdf-export-stage .page-content.writing-vertical { text-rendering:optimizeLegibility; }
 
 
@@ -3038,14 +3081,37 @@ html, body { min-width: 960px; }
 .pdf-export-stage .pdf-vertical-native-render .page-content.writing-vertical {
   writing-mode: vertical-rl !important;
   text-orientation: var(--text-orientation, mixed) !important;
-  font-feature-settings: "vert" 1, "vrt2" 1, "palt" 1 !important;
+  font-feature-settings: "vert" 1, "vrt2" 1 !important;
   text-rendering: geometricPrecision;
 }
 
 .pdf-export-stage .pdf-vertical-native-render .tate-chu-yoko {
-  writing-mode: horizontal-tb !important;
-  text-orientation: mixed !important;
-  text-combine-upright: all !important;
+  display:inline-flex !important;
+  writing-mode:horizontal-tb !important;
+  text-orientation:mixed !important;
+  text-combine-upright:none !important;
+  transform:none !important;
+}
+.pdf-export-stage .pdf-vertical-native-render .vertical-latin-run {
+  writing-mode:vertical-rl !important;
+  font-feature-settings:normal !important;
+  transform:none !important;
+  unicode-bidi:isolate;
+}
+.pdf-export-stage .pdf-vertical-native-render .vertical-latin-run.latin-sideways { text-orientation:sideways !important; }
+.pdf-export-stage .pdf-vertical-native-render .vertical-latin-run.latin-upright { text-orientation:upright !important; }
+.pdf-export-stage .pdf-vertical-native-render .vertical-ellipsis {
+  text-orientation:upright !important;
+  font-feature-settings:"vert" 1,"vrt2" 1 !important;
+  letter-spacing:0 !important;
+}
+.pdf-export-stage .pdf-vertical-native-render .page-margin-area,
+.pdf-export-stage .pdf-vertical-native-render .page-margin-slot,
+.pdf-export-stage .pdf-vertical-native-render .running-text,
+.pdf-export-stage .pdf-vertical-native-render .page-number-item {
+  writing-mode:horizontal-tb !important;
+  text-orientation:mixed !important;
+  direction:ltr !important;
 }
 
 /* v019.2: stable two-row application header and responsive toolbar */
@@ -3283,3 +3349,8 @@ html, body { min-width: 960px; }
 .decoration-selection-actions .button:hover { background: #edf6f1; border-color: #80aa99; }
 .decoration-selection-actions .danger-outline { color: #9e4040; background: #fff; border-color: #debaba; }
 .decoration-layer-back.has-selected { z-index: 7; }
+
+
+/* v020.1: vertical typography and line-start behavior fixes */
+.ellipsis-symbol { min-width:1.7em; font-family:var(--body-font); letter-spacing:0; }
+.running-text { writing-mode:horizontal-tb !important; text-orientation:mixed !important; }

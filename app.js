@@ -8,6 +8,9 @@ const MAX_MEDIA_DATA_CHARS = 3_200_000;
 const MAX_MEDIA_SOURCE_BYTES = 12 * 1024 * 1024;
 const MAX_DECORATIONS = 60;
 const MEDIA_MARKER_PATTERN = /^\s*\[\[figure:([a-zA-Z0-9_-]+)\]\]\s*$/;
+const LINE_INDENT_MARKER = '\uE000';
+const NO_LINE_INDENT_START_PATTERN = /^[\s　]*[「『（【〈《〔［｛“‘〝・●○◎◇◆□■△▲▽▼※＊*#…―—\-!?！？]/u;
+const VERTICAL_TOKEN_PATTERN = /…{2,}|[0-9]+|[A-Za-z]+(?:[A-Za-z0-9._/+:-]*[A-Za-z0-9])?/g;
 
 const PROJECT_INDEX_KEY = 'typesetting-app-v019-project-index';
 const PROJECT_PREFIX = 'typesetting-app-v019-project:';
@@ -990,17 +993,24 @@ function applyInlineFormatting(action, targetId) {
   if (!(textarea instanceof HTMLTextAreaElement)) return;
   const start = textarea.selectionStart;
   const end = textarea.selectionEnd;
-  if (!Number.isInteger(start) || !Number.isInteger(end) || start === end) {
-    textarea.focus();
-    showToast('先に装飾したい文字を選択してください。');
-    return;
-  }
+  if (!Number.isInteger(start) || !Number.isInteger(end)) return;
 
   const value = textarea.value;
   const selected = value.slice(start, end);
   let result = null;
 
-  if (action === 'ruby') {
+  if (action === 'ellipsis') {
+    result = {
+      value: `${value.slice(0, start)}……${value.slice(end)}`,
+      selectionStart: start + 2,
+      selectionEnd: start + 2,
+      message: '三点リーダー「……」を挿入しました。'
+    };
+  } else if (start === end) {
+    textarea.focus();
+    showToast('先に装飾したい文字を選択してください。');
+    return;
+  } else if (action === 'ruby') {
     if (selected.includes('\n')) {
       showToast('ルビは改行を含まない文字を選択してください。');
       return;
@@ -2756,8 +2766,7 @@ function createParagraphElement(text, options = {}) {
 
   const paragraph = document.createElement('p');
   paragraph.className = 'body-paragraph';
-  setTypesetText(paragraph, text, settings);
-  if (continuation) paragraph.style.textIndent = '0';
+  setTypesetParagraphText(paragraph, text, settings, { continuation, override });
   applyParagraphOverrideStyles(
     paragraph,
     override,
@@ -2792,7 +2801,6 @@ function applyParagraphOverrideStyles(
   if (Number.isFinite(normalized.lineHeight)) paragraph.style.lineHeight = `${normalized.lineHeight}pt`;
   if (Number.isFinite(normalized.letterSpacing)) paragraph.style.letterSpacing = `${normalized.letterSpacing}em`;
   if (normalized.textAlign && normalized.textAlign !== 'inherit') paragraph.style.textAlign = resolveTypesetAlign(normalized.textAlign, effectiveSettings);
-  if (!continuation && Number.isFinite(normalized.textIndent)) paragraph.style.textIndent = `${normalized.textIndent}em`;
 
   if (!continuation) {
     const beforeParts = [];
@@ -3123,7 +3131,8 @@ function addMarginItem(area, position, text, className, pageIndex, settings = DE
   if (!slot) return;
   const item = document.createElement('span');
   item.className = className;
-  setTypesetText(item, text, settings);
+  item.setAttribute('dir', 'auto');
+  setTypesetText(item, text, { ...settings, writingMode: 'horizontal-tb', autoTateChuYoko: false });
   slot.appendChild(item);
   area.dataset.hasItems = 'true';
 }
@@ -3158,6 +3167,38 @@ function resolveTypesetAlign(value, settings = DEFAULT_SETTINGS) {
   if (align === 'left') return 'start';
   if (align === 'right') return 'end';
   return align;
+}
+
+function setTypesetParagraphText(element, text, settings = DEFAULT_SETTINGS, options = {}) {
+  const normalizedOverride = normalizeParagraphOverride(options.override || {});
+  const configuredIndent = Number.isFinite(normalizedOverride.textIndent)
+    ? normalizedOverride.textIndent
+    : (settings.useTextIndent ? sanitizeNumber(settings.textIndent, 1) : 0);
+  const prepared = addLineIndentMarkers(
+    String(text ?? ''),
+    Math.max(0, configuredIndent),
+    Boolean(options.continuation)
+  );
+  element.style.setProperty('--line-indent', `${Math.max(0, configuredIndent)}em`);
+  element.replaceChildren();
+  renderInlineMarkup(element, prepared, settings, 0);
+}
+
+function addLineIndentMarkers(value, indentAmount, continuation = false) {
+  if (!(indentAmount > 0) || !value) return value;
+  return value.split('\n').map((line, index) => {
+    if (continuation && index === 0) return line;
+    if (!shouldIndentManualLine(line)) return line;
+    return `${LINE_INDENT_MARKER}${line}`;
+  }).join('\n');
+}
+
+function shouldIndentManualLine(line) {
+  const raw = String(line ?? '');
+  const plain = inlineMarkupToPlainText(raw);
+  if (!plain.trim()) return false;
+  if (/^[\s　]/u.test(plain)) return false;
+  return !NO_LINE_INDENT_START_PATTERN.test(plain);
 }
 
 function setTypesetText(element, text, settings = DEFAULT_SETTINGS) {
@@ -3227,26 +3268,78 @@ function renderInlineMarkup(parent, value, settings = DEFAULT_SETTINGS, depth = 
 
 function appendPlainTypesetText(parent, value, settings = DEFAULT_SETTINGS) {
   if (!value) return;
-  if (!isVerticalWriting(settings) || !settings.autoTateChuYoko) {
-    parent.appendChild(document.createTextNode(value));
-    return;
-  }
-  const pattern = /[0-9]+/g;
+  const normalizedValue = normalizeExclamationSpacing(value);
+  const vertical = isVerticalWriting(settings);
+  const pattern = vertical ? VERTICAL_TOKEN_PATTERN : new RegExp(LINE_INDENT_MARKER, 'g');
   let cursor = 0;
   let match;
-  while ((match = pattern.exec(value))) {
-    if (match.index > cursor) parent.appendChild(document.createTextNode(value.slice(cursor, match.index)));
-    if (match[0].length <= 3) {
-      const combined = document.createElement('span');
-      combined.className = 'tate-chu-yoko';
-      combined.textContent = match[0];
-      parent.appendChild(combined);
-    } else {
-      parent.appendChild(document.createTextNode(match[0]));
+
+  while ((match = pattern.exec(normalizedValue))) {
+    if (match.index > cursor) {
+      appendTypesetTextSegment(parent, normalizedValue.slice(cursor, match.index));
     }
+    appendTypesetToken(parent, match[0], settings);
     cursor = match.index + match[0].length;
   }
-  if (cursor < value.length) parent.appendChild(document.createTextNode(value.slice(cursor)));
+  if (cursor < normalizedValue.length) {
+    appendTypesetTextSegment(parent, normalizedValue.slice(cursor));
+  }
+}
+
+function normalizeExclamationSpacing(value) {
+  return String(value ?? '').replace(
+    /([！？]+)(?=[^\s\r\n　」』）】〉》〕］｝、。，．！？…―—])/gu,
+    '$1　'
+  );
+}
+
+function appendTypesetTextSegment(parent, segment) {
+  if (!segment) return;
+  const parts = segment.split(LINE_INDENT_MARKER);
+  parts.forEach((part, index) => {
+    if (index > 0) appendLineIndentNode(parent);
+    if (part) parent.appendChild(document.createTextNode(part));
+  });
+}
+
+function appendTypesetToken(parent, token, settings = DEFAULT_SETTINGS) {
+  if (token === LINE_INDENT_MARKER) {
+    appendLineIndentNode(parent);
+    return;
+  }
+
+  if (/^[0-9]+$/.test(token) && settings.autoTateChuYoko && token.length <= 3) {
+    const combined = document.createElement('span');
+    combined.className = `tate-chu-yoko digits-${token.length}`;
+    combined.textContent = token;
+    parent.appendChild(combined);
+    return;
+  }
+
+  if (/^[A-Za-z]/.test(token)) {
+    const latin = document.createElement('span');
+    latin.className = `vertical-latin-run ${settings.verticalTextOrientation === 'upright' ? 'latin-upright' : 'latin-sideways'}`;
+    latin.textContent = token;
+    parent.appendChild(latin);
+    return;
+  }
+
+  if (/^…{2,}$/.test(token)) {
+    const ellipsis = document.createElement('span');
+    ellipsis.className = 'vertical-ellipsis';
+    ellipsis.textContent = token;
+    parent.appendChild(ellipsis);
+    return;
+  }
+
+  appendTypesetTextSegment(parent, token);
+}
+
+function appendLineIndentNode(parent) {
+  const indent = document.createElement('span');
+  indent.className = 'manual-line-indent';
+  indent.setAttribute('aria-hidden', 'true');
+  parent.appendChild(indent);
 }
 
 function inlineMarkupToPlainText(value) {
