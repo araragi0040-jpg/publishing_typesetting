@@ -3318,8 +3318,18 @@ function appendTypesetToken(parent, token, settings = DEFAULT_SETTINGS) {
 
   if (/^[A-Za-z]/.test(token)) {
     const latin = document.createElement('span');
-    latin.className = `vertical-latin-run ${settings.verticalTextOrientation === 'upright' ? 'latin-upright' : 'latin-sideways'}`;
-    latin.textContent = token;
+    const verticalReading = settings.verticalTextOrientation === 'upright';
+    latin.className = `vertical-latin-run ${verticalReading ? 'latin-upright latin-stacked' : 'latin-sideways'}`;
+    if (verticalReading) {
+      Array.from(token).forEach((character) => {
+        const characterNode = document.createElement('span');
+        characterNode.className = 'vertical-latin-char';
+        characterNode.textContent = character;
+        latin.appendChild(characterNode);
+      });
+    } else {
+      latin.textContent = token;
+    }
     parent.appendChild(latin);
     return;
   }

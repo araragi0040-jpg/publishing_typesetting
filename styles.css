@@ -2351,29 +2351,35 @@ body.pdf-exporting {
 .page-content.writing-vertical .toc-level-3 { padding-left:0; padding-block-start:3em; }
 .page-content.writing-vertical .toc-empty-message { margin:0; margin-block-start:4mm; }
 .tate-chu-yoko {
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-  inline-size:1em;
-  block-size:1em;
-  writing-mode:horizontal-tb !important;
-  text-orientation:mixed !important;
-  text-combine-upright:none;
+  display:inline;
+  text-combine-upright:all;
+  -webkit-text-combine:horizontal;
+  text-orientation:upright !important;
   font-feature-settings:normal;
+  font-kerning:none;
   letter-spacing:0;
   line-height:1;
   white-space:nowrap;
-  vertical-align:middle;
+  vertical-align:baseline;
 }
-.tate-chu-yoko.digits-2 { font-size:.82em; inline-size:1.22em; block-size:1.22em; }
-.tate-chu-yoko.digits-3 { font-size:.68em; inline-size:1.47em; block-size:1.47em; }
+.tate-chu-yoko.digits-1,
+.tate-chu-yoko.digits-2,
+.tate-chu-yoko.digits-3 { font-size:1em; }
 .vertical-latin-run {
   font-feature-settings:normal;
   font-kerning:normal;
   unicode-bidi:isolate;
 }
 .vertical-latin-run.latin-sideways { text-orientation:sideways; }
-.vertical-latin-run.latin-upright { text-orientation:upright; }
+.vertical-latin-run.latin-upright {
+  text-orientation:upright;
+  letter-spacing:.04em;
+  white-space:nowrap;
+}
+.vertical-latin-run.latin-stacked .vertical-latin-char {
+  display:inline;
+  text-orientation:upright;
+}
 .vertical-ellipsis {
   text-orientation:upright;
   font-feature-settings:"vert" 1,"vrt2" 1;
@@ -3086,10 +3092,15 @@ html, body { min-width: 960px; }
 }
 
 .pdf-export-stage .pdf-vertical-native-render .tate-chu-yoko {
-  display:inline-flex !important;
-  writing-mode:horizontal-tb !important;
-  text-orientation:mixed !important;
-  text-combine-upright:none !important;
+  display:inline !important;
+  writing-mode:inherit !important;
+  text-orientation:upright !important;
+  text-combine-upright:all !important;
+  -webkit-text-combine:horizontal !important;
+  font-size:1em !important;
+  letter-spacing:0 !important;
+  line-height:1 !important;
+  vertical-align:baseline !important;
   transform:none !important;
 }
 .pdf-export-stage .pdf-vertical-native-render .vertical-latin-run {
@@ -3099,7 +3110,15 @@ html, body { min-width: 960px; }
   unicode-bidi:isolate;
 }
 .pdf-export-stage .pdf-vertical-native-render .vertical-latin-run.latin-sideways { text-orientation:sideways !important; }
-.pdf-export-stage .pdf-vertical-native-render .vertical-latin-run.latin-upright { text-orientation:upright !important; }
+.pdf-export-stage .pdf-vertical-native-render .vertical-latin-run.latin-upright {
+  text-orientation:upright !important;
+  letter-spacing:.04em !important;
+  white-space:nowrap !important;
+}
+.pdf-export-stage .pdf-vertical-native-render .vertical-latin-run.latin-stacked .vertical-latin-char {
+  display:inline !important;
+  text-orientation:upright !important;
+}
 .pdf-export-stage .pdf-vertical-native-render .vertical-ellipsis {
   text-orientation:upright !important;
   font-feature-settings:"vert" 1,"vrt2" 1 !important;

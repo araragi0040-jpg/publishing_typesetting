@@ -400,9 +400,10 @@
 <label class="field"><span>文字方向・綴じ方向</span><select id="documentLayout"><option selected value="horizontal-ltr">横書き・左綴じ</option><option value="vertical-rtl">縦書き・右綴じ</option></select></label>
 <p class="layout-status" id="layoutStatus">横書き・左綴じ：一般的な冊子・資料向けです。</p>
 <div class="vertical-options" id="verticalOptions" hidden>
-<label class="field"><span>英数字の向き</span><select id="verticalTextOrientation"><option selected value="mixed">自然な向き（英字は横倒し）</option><option value="upright">すべて正立</option></select></label>
+<label class="field"><span>英数字の向き</span><select id="verticalTextOrientation"><option selected value="mixed">横向き（英文を横倒しで表示）</option><option value="upright">縦読み（英字を1文字ずつ正立）</option></select></label>
+<p class="helper-text">「縦読み」を選ぶと、英単語を1文字ずつ上から下へ並べます。</p>
 <label class="check-row primary-check"><input checked id="autoTateChuYoko" type="checkbox"/><span>1〜3桁の半角数字を縦中横にする</span></label>
-<p class="helper-text">「12」「202」などの短い数字を、縦書きの1文字分に横並びで収めます。</p>
+<p class="helper-text">「1」「12」「202」などを、文字の中心軸にそろえて縦書きの1文字分に収めます。</p>
 </div>
 <label class="field"><span>用紙プリセット</span>
 <select id="paperPreset">
