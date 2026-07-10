@@ -3373,3 +3373,58 @@ html, body { min-width: 960px; }
 /* v020.1: vertical typography and line-start behavior fixes */
 .ellipsis-symbol { min-width:1.7em; font-family:var(--body-font); letter-spacing:0; }
 .running-text { writing-mode:horizontal-tb !important; text-orientation:mixed !important; }
+
+
+/* v020.3: width-aware Latin defaults, per-selection orientation, and stable digit alignment */
+.vertical-latin-run.latin-fullwidth.latin-upright,
+.vertical-latin-run.inline-latin-override.latin-upright {
+  text-orientation: upright;
+}
+.vertical-latin-run.latin-halfwidth.latin-sideways,
+.vertical-latin-run.inline-latin-override.latin-sideways {
+  text-orientation: sideways;
+}
+.inline-latin-override {
+  unicode-bidi: isolate;
+}
+.inline-latin-override.latin-sideways,
+.inline-latin-override.latin-sideways * {
+  text-orientation: sideways !important;
+}
+.inline-latin-override.latin-upright,
+.inline-latin-override.latin-upright * {
+  text-orientation: upright !important;
+}
+.vertical-number-run {
+  display: inline;
+  text-orientation: upright !important;
+  font-feature-settings: "vert" 1, "vrt2" 1;
+  font-kerning: none;
+  letter-spacing: 0;
+  vertical-align: baseline;
+}
+.vertical-number-run.fullwidth-number-run {
+  white-space: normal;
+}
+.vertical-number-run.halfwidth-number-run {
+  white-space: nowrap;
+}
+.tate-chu-yoko.halfwidth-digits {
+  position: relative;
+  inset: auto;
+  transform: none;
+  transform-origin: center center;
+}
+.pdf-export-stage .pdf-vertical-native-render .inline-latin-override.latin-sideways,
+.pdf-export-stage .pdf-vertical-native-render .inline-latin-override.latin-sideways * {
+  text-orientation: sideways !important;
+}
+.pdf-export-stage .pdf-vertical-native-render .inline-latin-override.latin-upright,
+.pdf-export-stage .pdf-vertical-native-render .inline-latin-override.latin-upright * {
+  text-orientation: upright !important;
+}
+.pdf-export-stage .pdf-vertical-native-render .vertical-number-run {
+  writing-mode: vertical-rl !important;
+  text-orientation: upright !important;
+  transform: none !important;
+}

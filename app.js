@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = 'v020';
+const APP_VERSION = 'v020.3';
 const SCHEMA_VERSION = 20;
 const AUTOSAVE_DELAY = 700;
 const MAX_MEDIA_ASSETS = 20;
@@ -10,7 +10,10 @@ const MAX_DECORATIONS = 60;
 const MEDIA_MARKER_PATTERN = /^\s*\[\[figure:([a-zA-Z0-9_-]+)\]\]\s*$/;
 const LINE_INDENT_MARKER = '\uE000';
 const NO_LINE_INDENT_START_PATTERN = /^[\s　]*[「『（【〈《〔［｛“‘〝・●○◎◇◆□■△▲▽▼※＊*#…―—\-!?！？]/u;
-const VERTICAL_TOKEN_PATTERN = /…{2,}|[0-9]+|[A-Za-z]+(?:[A-Za-z0-9._/+:-]*[A-Za-z0-9])?/g;
+const VERTICAL_TOKEN_PATTERN = /…{2,}|[0-9]+|[０-９]+|[A-Za-z]+(?:[A-Za-z0-9._/+:-]*[A-Za-z0-9])?|[Ａ-Ｚａ-ｚ]+/g;
+const INLINE_LATIN_SIDEWAYS_OPEN = '[[en-h]]';
+const INLINE_LATIN_UPRIGHT_OPEN = '[[en-v]]';
+const INLINE_LATIN_CLOSE = '[[/en]]';
 
 const PROJECT_INDEX_KEY = 'typesetting-app-v019-project-index';
 const PROJECT_PREFIX = 'typesetting-app-v019-project:';
@@ -35,7 +38,7 @@ const DEFAULT_SETTINGS = Object.freeze({
   marginRight: 15,
   writingMode: 'horizontal-tb',
   bindingDirection: 'left',
-  verticalTextOrientation: 'mixed',
+  verticalTextOrientation: 'auto',
   autoTateChuYoko: true,
   fontFamily: "'Noto Serif JP', 'Yu Mincho', 'Hiragino Mincho ProN', serif",
   fontSize: 9,
@@ -1033,6 +1036,22 @@ function applyInlineFormatting(action, targetId) {
       selectionEnd: start + 1 + base.length,
       message: 'ルビを設定しました。'
     };
+  } else if (action === 'latinSideways' || action === 'latinUpright') {
+    if (selected.includes('\n')) {
+      showToast('英語の向きは改行を含まない範囲へ設定してください。');
+      return;
+    }
+    const plain = inlineMarkupToPlainText(selected);
+    if (!/[A-Za-zＡ-Ｚａ-ｚ]/u.test(plain)) {
+      showToast('向きを変更する英字を選択してください。');
+      return;
+    }
+    result = setInlineLatinOrientation(
+      value,
+      start,
+      end,
+      action === 'latinUpright' ? INLINE_LATIN_UPRIGHT_OPEN : INLINE_LATIN_SIDEWAYS_OPEN
+    );
   } else if (action === 'clear') {
     result = clearInlineFormatting(value, start, end);
   } else {
@@ -1087,9 +1106,66 @@ function toggleInlineWrapper(value, start, end, open, close) {
   };
 }
 
+function setInlineLatinOrientation(value, start, end, requestedOpen) {
+  const selected = value.slice(start, end);
+  const opens = [INLINE_LATIN_SIDEWAYS_OPEN, INLINE_LATIN_UPRIGHT_OPEN];
+
+  for (const existingOpen of opens) {
+    const outsideStart = start - existingOpen.length;
+    const wrappedOutside = outsideStart >= 0
+      && value.slice(outsideStart, start) === existingOpen
+      && value.slice(end, end + INLINE_LATIN_CLOSE.length) === INLINE_LATIN_CLOSE;
+    if (wrappedOutside) {
+      if (existingOpen === requestedOpen) {
+        return {
+          value: `${value.slice(0, outsideStart)}${selected}${value.slice(end + INLINE_LATIN_CLOSE.length)}`,
+          selectionStart: outsideStart,
+          selectionEnd: outsideStart + selected.length,
+          message: '英語の個別方向設定を解除しました。'
+        };
+      }
+      const replaced = `${requestedOpen}${selected}${INLINE_LATIN_CLOSE}`;
+      return {
+        value: `${value.slice(0, outsideStart)}${replaced}${value.slice(end + INLINE_LATIN_CLOSE.length)}`,
+        selectionStart: outsideStart + requestedOpen.length,
+        selectionEnd: outsideStart + requestedOpen.length + selected.length,
+        message: requestedOpen === INLINE_LATIN_UPRIGHT_OPEN ? '選択した英語を縦読みにしました。' : '選択した英語を横向きにしました。'
+      };
+    }
+
+    if (selected.startsWith(existingOpen)
+      && selected.endsWith(INLINE_LATIN_CLOSE)
+      && selected.length >= existingOpen.length + INLINE_LATIN_CLOSE.length) {
+      const inner = selected.slice(existingOpen.length, selected.length - INLINE_LATIN_CLOSE.length);
+      if (existingOpen === requestedOpen) {
+        return {
+          value: `${value.slice(0, start)}${inner}${value.slice(end)}`,
+          selectionStart: start,
+          selectionEnd: start + inner.length,
+          message: '英語の個別方向設定を解除しました。'
+        };
+      }
+      const replaced = `${requestedOpen}${inner}${INLINE_LATIN_CLOSE}`;
+      return {
+        value: `${value.slice(0, start)}${replaced}${value.slice(end)}`,
+        selectionStart: start + requestedOpen.length,
+        selectionEnd: start + requestedOpen.length + inner.length,
+        message: requestedOpen === INLINE_LATIN_UPRIGHT_OPEN ? '選択した英語を縦読みにしました。' : '選択した英語を横向きにしました。'
+      };
+    }
+  }
+
+  return {
+    value: `${value.slice(0, start)}${requestedOpen}${selected}${INLINE_LATIN_CLOSE}${value.slice(end)}`,
+    selectionStart: start + requestedOpen.length,
+    selectionEnd: end + requestedOpen.length,
+    message: requestedOpen === INLINE_LATIN_UPRIGHT_OPEN ? '選択した英語を縦読みにしました。' : '選択した英語を横向きにしました。'
+  };
+}
+
 function clearInlineFormatting(value, start, end) {
   const selected = value.slice(start, end);
-  const wrappers = [['**', '**'], ['__', '__'], ['《《', '》》']];
+  const wrappers = [['**', '**'], ['__', '__'], ['《《', '》》'], [INLINE_LATIN_SIDEWAYS_OPEN, INLINE_LATIN_CLOSE], [INLINE_LATIN_UPRIGHT_OPEN, INLINE_LATIN_CLOSE]];
   for (const [open, close] of wrappers) {
     if (value.slice(Math.max(0, start - open.length), start) === open
       && value.slice(end, end + close.length) === close) {
@@ -3215,6 +3291,28 @@ function renderInlineMarkup(parent, value, settings = DEFAULT_SETTINGS, depth = 
 
   let cursor = 0;
   while (cursor < value.length) {
+    const latinOrientation = value.startsWith(INLINE_LATIN_SIDEWAYS_OPEN, cursor)
+      ? { open: INLINE_LATIN_SIDEWAYS_OPEN, className: 'latin-sideways' }
+      : value.startsWith(INLINE_LATIN_UPRIGHT_OPEN, cursor)
+        ? { open: INLINE_LATIN_UPRIGHT_OPEN, className: 'latin-upright latin-stacked' }
+        : null;
+    if (latinOrientation) {
+      const closeIndex = value.indexOf(INLINE_LATIN_CLOSE, cursor + latinOrientation.open.length);
+      if (closeIndex > cursor + latinOrientation.open.length) {
+        const node = document.createElement('span');
+        node.className = `vertical-latin-run inline-latin-override ${latinOrientation.className}`;
+        renderInlineMarkup(
+          node,
+          value.slice(cursor + latinOrientation.open.length, closeIndex),
+          settings,
+          depth + 1
+        );
+        parent.appendChild(node);
+        cursor = closeIndex + INLINE_LATIN_CLOSE.length;
+        continue;
+      }
+    }
+
     if (value.startsWith('｜', cursor)) {
       const baseEnd = value.indexOf('《', cursor + 1);
       const readingEnd = baseEnd >= 0 ? value.indexOf('》', baseEnd + 1) : -1;
@@ -3257,7 +3355,7 @@ function renderInlineMarkup(parent, value, settings = DEFAULT_SETTINGS, depth = 
       }
     }
 
-    const nextIndexes = ['｜', '《《', '**', '__']
+    const nextIndexes = [INLINE_LATIN_SIDEWAYS_OPEN, INLINE_LATIN_UPRIGHT_OPEN, '｜', '《《', '**', '__']
       .map((marker) => value.indexOf(marker, cursor + 1))
       .filter((index) => index >= 0);
     const next = nextIndexes.length ? Math.min(...nextIndexes) : value.length;
@@ -3308,18 +3406,37 @@ function appendTypesetToken(parent, token, settings = DEFAULT_SETTINGS) {
     return;
   }
 
-  if (/^[0-9]+$/.test(token) && settings.autoTateChuYoko && token.length <= 3) {
-    const combined = document.createElement('span');
-    combined.className = `tate-chu-yoko digits-${token.length}`;
-    combined.textContent = token;
-    parent.appendChild(combined);
+  if (/^[0-9]+$/.test(token)) {
+    if (settings.autoTateChuYoko && token.length <= 3) {
+      const combined = document.createElement('span');
+      combined.className = `tate-chu-yoko halfwidth-digits digits-${token.length}`;
+      combined.textContent = token;
+      parent.appendChild(combined);
+      return;
+    }
+    const digits = document.createElement('span');
+    digits.className = 'vertical-number-run halfwidth-number-run';
+    digits.textContent = token;
+    parent.appendChild(digits);
     return;
   }
 
-  if (/^[A-Za-z]/.test(token)) {
+  if (/^[０-９]+$/u.test(token)) {
+    const digits = document.createElement('span');
+    digits.className = 'vertical-number-run fullwidth-number-run';
+    digits.textContent = token;
+    parent.appendChild(digits);
+    return;
+  }
+
+  if (/^[A-Za-zＡ-Ｚａ-ｚ]/u.test(token)) {
     const latin = document.createElement('span');
-    const verticalReading = settings.verticalTextOrientation === 'upright';
-    latin.className = `vertical-latin-run ${verticalReading ? 'latin-upright latin-stacked' : 'latin-sideways'}`;
+    const mode = ['auto', 'sideways', 'upright'].includes(settings.verticalTextOrientation)
+      ? settings.verticalTextOrientation
+      : 'auto';
+    const fullwidthLatin = /^[Ａ-Ｚａ-ｚ]+$/u.test(token);
+    const verticalReading = mode === 'upright' || (mode === 'auto' && fullwidthLatin);
+    latin.className = `vertical-latin-run ${fullwidthLatin ? 'latin-fullwidth' : 'latin-halfwidth'} ${verticalReading ? 'latin-upright latin-stacked' : 'latin-sideways'}`;
     if (verticalReading) {
       Array.from(token).forEach((character) => {
         const characterNode = document.createElement('span');
@@ -3357,6 +3474,7 @@ function inlineMarkupToPlainText(value) {
   for (let pass = 0; pass < 6; pass += 1) {
     const previous = result;
     result = result
+      .replace(/\[\[en-[hv]\]\]([\s\S]*?)\[\[\/en\]\]/gu, '$1')
       .replace(/｜([^｜《》\n]+)《([^《》\n]+)》/gu, '$1')
       .replace(/《《([\s\S]*?)》》/gu, '$1')
       .replace(/\*\*([\s\S]*?)\*\*/gu, '$1')
@@ -3371,6 +3489,19 @@ function getInlineMarkupRanges(value) {
   const ranges = [];
   let cursor = 0;
   while (cursor < text.length) {
+    const latinMarker = text.startsWith(INLINE_LATIN_SIDEWAYS_OPEN, cursor)
+      ? { open: INLINE_LATIN_SIDEWAYS_OPEN, type: 'latin-sideways' }
+      : text.startsWith(INLINE_LATIN_UPRIGHT_OPEN, cursor)
+        ? { open: INLINE_LATIN_UPRIGHT_OPEN, type: 'latin-upright' }
+        : null;
+    if (latinMarker) {
+      const closeIndex = text.indexOf(INLINE_LATIN_CLOSE, cursor + latinMarker.open.length);
+      if (closeIndex > cursor + latinMarker.open.length) {
+        ranges.push({ start: cursor, end: closeIndex + INLINE_LATIN_CLOSE.length, type: latinMarker.type });
+        cursor = closeIndex + INLINE_LATIN_CLOSE.length;
+        continue;
+      }
+    }
     if (text.startsWith('｜', cursor)) {
       const baseEnd = text.indexOf('《', cursor + 1);
       const readingEnd = baseEnd >= 0 ? text.indexOf('》', baseEnd + 1) : -1;
@@ -3527,7 +3658,7 @@ function collectSettings() {
     marginRight: sanitizeNumber(els.marginRight.value, 15),
     writingMode: els.documentLayout.value === 'vertical-rtl' ? 'vertical-rl' : 'horizontal-tb',
     bindingDirection: els.documentLayout.value === 'vertical-rtl' ? 'right' : 'left',
-    verticalTextOrientation: els.verticalTextOrientation.value === 'upright' ? 'upright' : 'mixed',
+    verticalTextOrientation: ['auto', 'sideways', 'upright'].includes(els.verticalTextOrientation.value) ? els.verticalTextOrientation.value : 'auto',
     autoTateChuYoko: els.autoTateChuYoko.checked,
     fontFamily: els.fontFamily.value,
     fontSize: sanitizeNumber(els.fontSize.value, 9),
@@ -3638,7 +3769,7 @@ function applyState(state) {
 function applySettingsToInputs(settings) {
   const normalized = { ...deepClone(DEFAULT_SETTINGS), ...(settings || {}) };
   els.documentLayout.value = normalized.writingMode === 'vertical-rl' ? 'vertical-rtl' : 'horizontal-ltr';
-  els.verticalTextOrientation.value = normalized.verticalTextOrientation === 'upright' ? 'upright' : 'mixed';
+  els.verticalTextOrientation.value = ['sideways', 'upright'].includes(normalized.verticalTextOrientation) ? normalized.verticalTextOrientation : 'auto';
   els.autoTateChuYoko.checked = normalized.autoTateChuYoko !== false;
   updateDocumentLayoutControls();
   els.paperPreset.value = normalized.paperPreset;
@@ -3750,6 +3881,9 @@ function normalizeState(raw) {
   );
 
   const normalizedSettings = { ...base.settings, ...(source.settings || {}) };
+  normalizedSettings.verticalTextOrientation = ['sideways', 'upright'].includes(normalizedSettings.verticalTextOrientation)
+    ? normalizedSettings.verticalTextOrientation
+    : 'auto';
   if (!source.settings || source.settings.useTextIndent === undefined) {
     normalizedSettings.useTextIndent = sanitizeNumber(normalizedSettings.textIndent, 1) > 0;
   }

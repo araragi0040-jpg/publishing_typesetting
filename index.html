@@ -4,8 +4,8 @@
 <head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1" name="viewport"/>
-<meta content="出版社向け簡易組版アプリ v020" name="description"/>
-<title>組版アプリ v020</title>
+<meta content="出版社向け簡易組版アプリ v020.3" name="description"/>
+<title>組版アプリ v020.3</title>
 <link href="styles.css" rel="stylesheet"/>
 <link rel="icon" href="data:,">
 </head>
@@ -14,7 +14,7 @@
 <header class="topbar">
 <div class="brand-block">
 <strong>組版アプリ</strong>
-<span class="version-badge">v020</span>
+<span class="version-badge">v020.3</span>
 </div>
 <label class="project-name-wrap">
 <span>プロジェクト名</span>
@@ -129,6 +129,8 @@
           <button class="format-action" data-inline-format="emphasis" type="button" title="選択した文字に傍点を付ける"><span class="format-symbol emphasis-symbol">﹅</span><span>傍点</span></button>
           <button class="format-action" data-inline-format="ruby" type="button" title="選択した文字にルビを付ける"><span class="format-symbol ruby-symbol">ル</span><span>ルビ</span></button>
           <button class="format-action" data-inline-format="underline" type="button" title="選択した文字に下線を付ける"><u>U</u><span>下線</span></button>
+          <button class="format-action" data-inline-format="latinSideways" type="button" title="選択した英語だけを横向きにする"><span class="format-symbol">A→</span><span>英字横</span></button>
+          <button class="format-action" data-inline-format="latinUpright" type="button" title="選択した英語だけを縦読みにする"><span class="format-symbol">A↓</span><span>英字縦</span></button>
           <button class="format-action" data-inline-format="ellipsis" type="button" title="カーソル位置へ三点リーダー「……」を挿入"><span class="format-symbol ellipsis-symbol">……</span><span>三点リーダー</span></button>
           <button class="format-action subtle" data-inline-format="clear" type="button" title="選択範囲の装飾を解除"><span class="format-symbol">×</span><span>解除</span></button>
           <button class="format-action media-insert-action" data-media-target="bodyInput" type="button" title="カーソル位置へ画像を挿入"><span class="format-symbol">▧</span><span>画像</span></button>
@@ -140,7 +142,7 @@
 
 これは、組版アプリv019.2の動作確認用原稿です。用紙設定から「縦書き・右綴じ」へ切り替えると、同じ原稿を縦書きで確認できます。
 
-文字を選択して、**太字**、《《傍点》》、｜組版《くみはん》、__下線__を設定できます。記号はプレビューやPDFには表示されません。
+文字を選択して、太字・傍点・ルビ・下線・英語の横向き／縦読みを個別設定できます。記号はプレビューやPDFには表示されません。
 
 「画像」ボタンから写真や図を追加し、本文中の好きな位置へ挿入できます。画像の幅、配置、キャプションは専用画面から変更できます。
 
@@ -173,7 +175,7 @@
         </div>
         <div>
           <strong>文字装飾の記法</strong>
-          <span><code>**太字**</code>　<code>《《傍点》》</code>　<code>｜漢字《かんじ》</code>　<code>__下線__</code></span>
+          <span><code>**太字**</code>　<code>《《傍点》》</code>　<code>｜漢字《かんじ》</code>　<code>__下線__</code>　英字方向はボタンで設定</span>
         </div>
         <div>
           <strong>画像・図表</strong>
@@ -237,6 +239,8 @@
               <button class="format-action" data-inline-format="emphasis" type="button"><span class="format-symbol emphasis-symbol">﹅</span><span>傍点</span></button>
               <button class="format-action" data-inline-format="ruby" type="button"><span class="format-symbol ruby-symbol">ル</span><span>ルビ</span></button>
               <button class="format-action" data-inline-format="underline" type="button"><u>U</u><span>下線</span></button>
+              <button class="format-action" data-inline-format="latinSideways" type="button" title="選択した英語だけを横向きにする"><span class="format-symbol">A→</span><span>英字横</span></button>
+              <button class="format-action" data-inline-format="latinUpright" type="button" title="選択した英語だけを縦読みにする"><span class="format-symbol">A↓</span><span>英字縦</span></button>
               <button class="format-action" data-inline-format="ellipsis" type="button" title="カーソル位置へ三点リーダー「……」を挿入"><span class="format-symbol ellipsis-symbol">……</span><span>三点リーダー</span></button>
               <button class="format-action subtle" data-inline-format="clear" type="button"><span class="format-symbol">×</span><span>解除</span></button>
               <button class="format-action media-insert-action" data-media-target="chapterBodyInput" type="button"><span class="format-symbol">▧</span><span>画像</span></button>
@@ -400,7 +404,7 @@
 <label class="field"><span>文字方向・綴じ方向</span><select id="documentLayout"><option selected value="horizontal-ltr">横書き・左綴じ</option><option value="vertical-rtl">縦書き・右綴じ</option></select></label>
 <p class="layout-status" id="layoutStatus">横書き・左綴じ：一般的な冊子・資料向けです。</p>
 <div class="vertical-options" id="verticalOptions" hidden>
-<label class="field"><span>英数字の向き</span><select id="verticalTextOrientation"><option selected value="mixed">横向き（英文を横倒しで表示）</option><option value="upright">縦読み（英字を1文字ずつ正立）</option></select></label>
+<label class="field"><span>英語の基本方向</span><select id="verticalTextOrientation"><option selected value="auto">自動（全角は縦読み／半角は横向き）</option><option value="sideways">すべて横向き</option><option value="upright">すべて縦読み</option></select></label>
 <p class="helper-text">「縦読み」を選ぶと、英単語を1文字ずつ上から下へ並べます。</p>
 <label class="check-row primary-check"><input checked id="autoTateChuYoko" type="checkbox"/><span>1〜3桁の半角数字を縦中横にする</span></label>
 <p class="helper-text">「1」「12」「202」などを、文字の中心軸にそろえて縦書きの1文字分に収めます。</p>
